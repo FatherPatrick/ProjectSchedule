@@ -11,9 +11,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Send reminders for any CONFIRMED appointment starting in the next ~26 hours
+  // that hasn't been reminded yet. Window is wide enough to tolerate a
+  // once-a-day cron (Vercel Hobby) but the reminderSentAt guard prevents
+  // duplicates if the endpoint is also pinged more frequently.
   const now = new Date();
-  const windowStart = new Date(now.getTime() + 23 * 60 * 60 * 1000);
-  const windowEnd = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+  const windowStart = now;
+  const windowEnd = new Date(now.getTime() + 26 * 60 * 60 * 1000);
 
   const due = await prisma.appointment.findMany({
     where: {
