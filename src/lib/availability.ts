@@ -5,7 +5,7 @@ import {
   bizWallClockToUTC,
   formatBiz,
 } from "./timezone";
-import { SLOT_GRANULARITY_MIN } from "./config";
+import { getSettings } from "./settings";
 
 export interface Slot {
   /** ISO start time (UTC). */
@@ -26,9 +26,10 @@ export async function getAvailableSlots(opts: {
 }): Promise<Slot[]> {
   const { serviceId, dateKey } = opts;
 
-  const service = await prisma.service.findUnique({
-    where: { id: serviceId },
-  });
+  const [service, settings] = await Promise.all([
+    prisma.service.findUnique({ where: { id: serviceId } }),
+    getSettings(),
+  ]);
   if (!service || !service.active) return [];
 
   // Determine the day's business hours.
@@ -71,7 +72,7 @@ export async function getAvailableSlots(opts: {
   for (
     let m = hours.openMin;
     m <= lastStart;
-    m += SLOT_GRANULARITY_MIN
+    m += settings.slotGranularityMin
   ) {
     const start = bizWallClockToUTC(dateKey, m);
     const end = new Date(start.getTime() + service.durationMinutes * 60_000);

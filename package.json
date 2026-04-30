@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
+    "dev:seed": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Seed",
+    "dev:fresh": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Fresh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

@@ -10,9 +10,6 @@ export const APP_URL =
 // Cancellation window in hours — clients cannot self-cancel inside this window.
 export const CANCELLATION_WINDOW_HOURS = 24;
 
-// Slot granularity in minutes for the booking calendar.
-export const SLOT_GRANULARITY_MIN = 15;
-
 // Default weekly hours seeded into BusinessHours table.
 // dayOfWeek: 0=Sun, 1=Mon ... 6=Sat. Open 9am-6pm Thu-Sun.
 export const DEFAULT_BUSINESS_HOURS: ReadonlyArray<{

@@ -1,10 +1,16 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { getSettings, updateSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 const DOWS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const GRANULARITY_OPTIONS = [
+  { value: 15, label: "Every 15 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every hour" },
+];
 
 async function assertAdmin() {
   const s = await auth();
@@ -26,6 +32,10 @@ async function saveHours(formData: FormData) {
       create: { dayOfWeek: d, active, openMin, closeMin },
     });
   }
+  const granularity = Number(formData.get("granularity"));
+  if ([15, 30, 60].includes(granularity)) {
+    await updateSettings({ slotGranularityMin: granularity });
+  }
   revalidatePath("/admin/hours");
 }
 
@@ -41,17 +51,23 @@ function fromMin(min: number) {
 }
 
 export default async function HoursAdmin() {
-  const rows = await prisma.businessHours.findMany();
+  const [rows, settings] = await Promise.all([
+    prisma.businessHours.findMany(),
+    getSettings(),
+  ]);
   const byDay = new Map(rows.map((r) => [r.dayOfWeek, r]));
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Business hours</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        Business hours & booking interval
+      </h1>
       <form
         action={saveHours}
-        className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3"
+        className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4"
       >
-        {DOWS.map((label, d) => {
+        <div className="space-y-3">
+          {DOWS.map((label, d) => {
           const r = byDay.get(d);
           return (
             <div
@@ -87,8 +103,28 @@ export default async function HoursAdmin() {
             </div>
           );
         })}
+        </div>
+
+        <div className="border-t border-neutral-200 pt-3">
+          <label className="text-sm font-medium">Booking interval</label>
+          <p className="text-xs text-neutral-500 mb-2">
+            How often a booking start time is offered to clients.
+          </p>
+          <select
+            name="granularity"
+            defaultValue={settings.slotGranularityMin}
+            className="rounded-lg border border-neutral-300 px-3 py-2"
+          >
+            {GRANULARITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
-          Save hours
+          Save changes
         </button>
       </form>
     </div>
