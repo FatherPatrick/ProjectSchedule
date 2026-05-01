@@ -19,7 +19,13 @@ interface Slot {
   label: string;
 }
 
-export function BookingForm({ services }: { services: ServiceLite[] }) {
+export function BookingForm({
+  services,
+  closedDayOfWeek,
+}: {
+  services: ServiceLite[];
+  closedDayOfWeek: number[];
+}) {
   const [serviceId, setServiceId] = useState<string>(services[0]?.id ?? "");
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -150,7 +156,10 @@ export function BookingForm({ services }: { services: ServiceLite[] }) {
             mode="single"
             selected={date}
             onSelect={setDate}
-            disabled={{ before: new Date() }}
+            disabled={[
+              { before: new Date() },
+              { dayOfWeek: closedDayOfWeek },
+            ]}
             showOutsideDays
           />
         </div>

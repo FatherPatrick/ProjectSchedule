@@ -126,6 +126,12 @@ model BusinessHours {
   active    Boolean @default(true)
 }
 
+model Setting {
+  id                 String @id
+  slotGranularityMin Int
+  allowStartAtClose  Boolean @default(false)
+}
+
 model NotificationLog {
   id            String              @id @default(cuid())
   appointmentId String

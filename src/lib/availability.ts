@@ -66,8 +66,10 @@ export async function getAvailableSlots(opts: {
   const now = new Date();
   const slots: Slot[] = [];
 
-  // Last possible start so the appointment ends by closeMin.
-  const lastStart = hours.closeMin - service.durationMinutes;
+  // Optionally allow appointments to start exactly at close time.
+  const lastStart = settings.allowStartAtClose
+    ? hours.closeMin
+    : hours.closeMin - service.durationMinutes;
 
   for (
     let m = hours.openMin;
