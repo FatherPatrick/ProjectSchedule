@@ -23,6 +23,8 @@ export default async function ManageAppointmentPage({
     (appt.startsAt.getTime() - Date.now()) / (1000 * 60 * 60);
   const canCancel =
     appt.status === "CONFIRMED" && hoursAway >= CANCELLATION_WINDOW_HOURS;
+  const statusLabel =
+    appt.status === "PENDING" ? "Pending review" : appt.status;
 
   return (
     <div className="space-y-6">
@@ -40,11 +42,19 @@ export default async function ManageAppointmentPage({
         </div>
         <div>
           <span className="text-sm text-neutral-500">Status</span>
-          <div className="font-medium">{appt.status}</div>
+          <div className="font-medium">{statusLabel}</div>
         </div>
       </div>
 
-      {appt.status === "CONFIRMED" ? (
+      {appt.status === "PENDING" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            Your proposed time is awaiting review. We&apos;ll email you once
+            it&apos;s confirmed or if we need to suggest a different time.
+          </p>
+          <CancelButton token={token} label="Withdraw request" />
+        </div>
+      ) : appt.status === "CONFIRMED" ? (
         canCancel ? (
           <CancelButton token={token} />
         ) : (

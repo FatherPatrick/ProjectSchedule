@@ -19,15 +19,18 @@ export async function POST(
   const { id } = await params;
   const a = await prisma.appointment.findUnique({ where: { id } });
   if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (a.status !== "CONFIRMED") {
+  if (a.status !== "CONFIRMED" && a.status !== "PENDING") {
     return NextResponse.json({ error: "Already inactive" }, { status: 409 });
   }
+  const wasConfirmed = a.status === "CONFIRMED";
   await prisma.appointment.update({
     where: { id },
     data: { status: "CANCELLED" },
   });
-  sendNotifications(id, "CANCELLATION").catch((err) =>
-    console.error("[admin cancel] notify failed", err)
-  );
+  if (wasConfirmed) {
+    sendNotifications(id, "CANCELLATION").catch((err) =>
+      console.error("[admin cancel] notify failed", err)
+    );
+  }
   return NextResponse.json({ ok: true });
 }

@@ -100,3 +100,13 @@ Open <http://localhost:3000>.
   Resend domain.
 - **Privacy/Terms/Cancellation:** Templates in `src/app/{privacy,terms,cancellation-policy}`
   — review with a lawyer before publishing.
+
+## TODO
+
+- Only text confirmation/reminders for now
+- Styling changes and styling customization for admins
+- Investigate personal email domains
+- Investigate email confirmation/reminders
+- Investigate making this work for many different admins
+- Investigate app for admins with website for clients
+- Name the app

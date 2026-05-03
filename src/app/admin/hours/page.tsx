@@ -1,33 +1,17 @@
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import SaveToast from "./SaveToast";
-import {
-  BOOKING_INTERVAL_OPTIONS,
-  getSettings,
-  updateSettings,
-} from "@/lib/settings";
+import { getSettings, updateSettings } from "@/lib/settings";
+import { bizDateKey, formatBiz } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
 
 const DOWS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-function formatGranularityLabel(value: number) {
-  if (value < 60) return `Every ${value} minutes`;
-  if (value === 60) return "Every hour";
-
-  const hours = value / 60;
-  const isWhole = Number.isInteger(hours);
-  const pretty = isWhole ? String(hours) : hours.toFixed(1);
-  const unit = hours === 1 ? "hour" : "hours";
-  return `Every ${pretty} ${unit}`;
-}
-
-const GRANULARITY_OPTIONS = BOOKING_INTERVAL_OPTIONS.map((value) => ({
-  value,
-  label: formatGranularityLabel(value),
-}));
-const ALLOWED_GRANULARITIES = new Set<number>(BOOKING_INTERVAL_OPTIONS);
+const GRANULARITY_OPTIONS = [
+  { value: 15, label: "Every 15 minutes" },
+  { value: 30, label: "Every 30 minutes" },
+  { value: 60, label: "Every hour" },
+];
 
 async function assertAdmin() {
   const s = await auth();
@@ -37,31 +21,23 @@ async function assertAdmin() {
 async function saveHours(formData: FormData) {
   "use server";
   await assertAdmin();
-  try {
-    for (let d = 0; d < 7; d++) {
-      const active = formData.get(`active-${d}`) === "on";
-      const open = String(formData.get(`open-${d}`) ?? "09:00");
-      const close = String(formData.get(`close-${d}`) ?? "18:00");
-      const openMin = toMin(open);
-      const closeMin = toMin(close);
-      await prisma.businessHours.upsert({
-        where: { dayOfWeek: d },
-        update: { active, openMin, closeMin },
-        create: { dayOfWeek: d, active, openMin, closeMin },
-      });
-    }
-    const granularity = Number(formData.get("granularity"));
-    const allowStartAtClose = formData.get("allowStartAtClose") === "on";
-    if (ALLOWED_GRANULARITIES.has(granularity)) {
-      await updateSettings({ slotGranularityMin: granularity, allowStartAtClose });
-    } else {
-      await updateSettings({ allowStartAtClose });
-    }
-  } catch {
-    redirect("/admin/hours?saved=error");
+  for (let d = 0; d < 7; d++) {
+    const active = formData.get(`active-${d}`) === "on";
+    const open = String(formData.get(`open-${d}`) ?? "09:00");
+    const close = String(formData.get(`close-${d}`) ?? "18:00");
+    const openMin = toMin(open);
+    const closeMin = toMin(close);
+    await prisma.businessHours.upsert({
+      where: { dayOfWeek: d },
+      update: { active, openMin, closeMin },
+      create: { dayOfWeek: d, active, openMin, closeMin },
+    });
+  }
+  const granularity = Number(formData.get("granularity"));
+  if ([15, 30, 60].includes(granularity)) {
+    await updateSettings({ slotGranularityMin: granularity });
   }
   revalidatePath("/admin/hours");
-  redirect("/admin/hours?saved=success");
 }
 
 function toMin(hhmm: string) {
@@ -75,23 +51,102 @@ function fromMin(min: number) {
   return `${h}:${m}`;
 }
 
-export default async function HoursAdmin({
-  searchParams,
-}: {
-  searchParams: Promise<{ saved?: "success" | "error" }>;
-}) {
-  const { saved } = await searchParams;
-  const [rows, settings] = await Promise.all([
+async function addScheduledChange(formData: FormData) {
+  "use server";
+  await assertAdmin();
+  const dateStr = String(formData.get("effectiveFrom") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error("Invalid effective date");
+  }
+  const today = bizDateKey(new Date());
+  if (dateStr <= today) {
+    throw new Error("Effective date must be in the future");
+  }
+  const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
+  const note = String(formData.get("note") ?? "").trim() || null;
+
+  const data = [];
+  for (let d = 0; d < 7; d++) {
+    const active = formData.get(`s-active-${d}`) === "on";
+    const open = String(formData.get(`s-open-${d}`) ?? "09:00");
+    const close = String(formData.get(`s-close-${d}`) ?? "18:00");
+    data.push({
+      effectiveFrom,
+      dayOfWeek: d,
+      openMin: toMin(open),
+      closeMin: toMin(close),
+      active,
+      note,
+    });
+  }
+
+  await prisma.$transaction(
+    data.map((row) =>
+      prisma.businessHoursSchedule.upsert({
+        where: {
+          effectiveFrom_dayOfWeek: {
+            effectiveFrom: row.effectiveFrom,
+            dayOfWeek: row.dayOfWeek,
+          },
+        },
+        update: {
+          openMin: row.openMin,
+          closeMin: row.closeMin,
+          active: row.active,
+          note: row.note,
+        },
+        create: row,
+      })
+    )
+  );
+  revalidatePath("/admin/hours");
+}
+
+async function deleteScheduledChange(formData: FormData) {
+  "use server";
+  await assertAdmin();
+  const dateStr = String(formData.get("effectiveFrom") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+  const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
+  await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
+  revalidatePath("/admin/hours");
+}
+
+export default async function HoursAdmin() {
+  const todayKey = bizDateKey(new Date());
+  const todayMidnightUTC = new Date(`${todayKey}T00:00:00.000Z`);
+  const [rows, settings, scheduleRows] = await Promise.all([
     prisma.businessHours.findMany(),
     getSettings(),
+    prisma.businessHoursSchedule.findMany({
+      where: { effectiveFrom: { gt: todayMidnightUTC } },
+      orderBy: [{ effectiveFrom: "asc" }, { dayOfWeek: "asc" }],
+    }),
   ]);
   const byDay = new Map(rows.map((r) => [r.dayOfWeek, r]));
 
+  // Group future schedule rows by their effectiveFrom date (YYYY-MM-DD).
+  const scheduleGroups = new Map<
+    string,
+    { note: string | null; days: Map<number, (typeof scheduleRows)[number]> }
+  >();
+  for (const row of scheduleRows) {
+    const key = row.effectiveFrom.toISOString().slice(0, 10);
+    let group = scheduleGroups.get(key);
+    if (!group) {
+      group = { note: row.note, days: new Map() };
+      scheduleGroups.set(key, group);
+    }
+    group.days.set(row.dayOfWeek, row);
+  }
+
+  // Default values for the "add scheduled change" form mirror current hours.
+  const tomorrow = new Date(todayMidnightUTC.getTime() + 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
   return (
     <div className="space-y-6">
-      {saved === "success" || saved === "error" ? (
-        <SaveToast status={saved} />
-      ) : null}
       <h1 className="text-2xl font-semibold tracking-tight">
         Business hours & booking interval
       </h1>
@@ -154,27 +209,157 @@ export default async function HoursAdmin({
               </option>
             ))}
           </select>
-          <label className="mt-3 flex items-start gap-2 text-sm text-neutral-700">
-            <input
-              type="checkbox"
-              name="allowStartAtClose"
-              defaultChecked={settings.allowStartAtClose}
-              className="mt-1"
-            />
-            <span>
-              Allow appointments to start at closing time.
-              <span className="block text-xs text-neutral-500">
-                If enabled, a long appointment may end after the listed close
-                time.
-              </span>
-            </span>
-          </label>
         </div>
 
         <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
           Save changes
         </button>
       </form>
+
+      <section className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Scheduled future changes
+          </h2>
+          <p className="text-sm text-neutral-600">
+            Define a new weekly schedule that takes effect on a future date.
+            On and after that date, these hours replace the defaults above
+            until another scheduled change takes effect.
+          </p>
+        </div>
+
+        {scheduleGroups.size === 0 ? (
+          <p className="text-sm text-neutral-500 italic">
+            No future changes scheduled.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {Array.from(scheduleGroups.entries()).map(([dateKey, group]) => {
+              const display = formatBiz(
+                new Date(`${dateKey}T12:00:00.000Z`),
+                "EEEE, MMMM d, yyyy"
+              );
+              return (
+                <li
+                  key={dateKey}
+                  className="rounded-xl border border-neutral-200 p-3"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="font-medium">Effective {display}</div>
+                      {group.note ? (
+                        <div className="text-xs text-neutral-500 mt-0.5">
+                          {group.note}
+                        </div>
+                      ) : null}
+                    </div>
+                    <form action={deleteScheduledChange}>
+                      <input
+                        type="hidden"
+                        name="effectiveFrom"
+                        value={dateKey}
+                      />
+                      <button
+                        type="submit"
+                        className="text-xs text-red-700 underline underline-offset-2"
+                      >
+                        Delete
+                      </button>
+                    </form>
+                  </div>
+                  <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    {DOWS.map((label, d) => {
+                      const r = group.days.get(d);
+                      const text = !r
+                        ? "(unchanged)"
+                        : !r.active || r.openMin >= r.closeMin
+                        ? "Closed"
+                        : `${fromMin(r.openMin)} – ${fromMin(r.closeMin)}`;
+                      return (
+                        <li key={d} className="flex justify-between gap-2">
+                          <span className="text-neutral-600">{label}</span>
+                          <span>{text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <details className="rounded-xl border border-neutral-200 p-3">
+          <summary className="cursor-pointer text-sm font-medium">
+            Add scheduled change
+          </summary>
+          <form action={addScheduledChange} className="mt-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm flex items-center gap-2">
+                Effective from
+                <input
+                  type="date"
+                  name="effectiveFrom"
+                  required
+                  min={tomorrow}
+                  defaultValue={tomorrow}
+                  className="rounded-lg border border-neutral-300 px-2 py-1"
+                />
+              </label>
+              <label className="text-sm flex items-center gap-2 grow">
+                Note
+                <input
+                  type="text"
+                  name="note"
+                  placeholder="Optional reason (e.g. summer hours)"
+                  className="rounded-lg border border-neutral-300 px-2 py-1 w-full"
+                />
+              </label>
+            </div>
+            <div className="space-y-2">
+              {DOWS.map((label, d) => {
+                const r = byDay.get(d);
+                return (
+                  <div
+                    key={d}
+                    className="flex flex-wrap items-center gap-3 border-b border-neutral-100 last:border-0 pb-2"
+                  >
+                    <label className="w-28 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        name={`s-active-${d}`}
+                        defaultChecked={r?.active ?? false}
+                      />
+                      <span className="font-medium">{label}</span>
+                    </label>
+                    <label className="text-sm flex items-center gap-1">
+                      Open
+                      <input
+                        type="time"
+                        name={`s-open-${d}`}
+                        defaultValue={fromMin(r?.openMin ?? 9 * 60)}
+                        className="rounded-lg border border-neutral-300 px-2 py-1"
+                      />
+                    </label>
+                    <label className="text-sm flex items-center gap-1">
+                      Close
+                      <input
+                        type="time"
+                        name={`s-close-${d}`}
+                        defaultValue={fromMin(r?.closeMin ?? 18 * 60)}
+                        className="rounded-lg border border-neutral-300 px-2 py-1"
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
+              Schedule change
+            </button>
+          </form>
+        </details>
+      </section>
     </div>
   );
 }

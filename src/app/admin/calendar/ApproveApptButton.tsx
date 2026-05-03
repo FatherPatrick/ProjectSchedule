@@ -3,13 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-export function CancelApptButton({
-  id,
-  label = "Cancel",
-}: {
-  id: string;
-  label?: string;
-}) {
+export function ApproveApptButton({ id }: { id: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -19,29 +13,21 @@ export function CancelApptButton({
       <button
         disabled={pending}
         onClick={() => {
-          if (
-            !confirm(
-              label === "Decline"
-                ? "Decline this request?"
-                : "Cancel this appointment and notify the client?"
-            )
-          )
-            return;
           start(async () => {
-            const res = await fetch(`/api/admin/appointments/${id}/cancel`, {
+            const res = await fetch(`/api/admin/appointments/${id}/approve`, {
               method: "POST",
             });
             if (!res.ok) {
               const j = await res.json().catch(() => ({}));
-              setErr(j.error ?? "Could not cancel.");
+              setErr(j.error ?? "Could not approve.");
               return;
             }
             router.refresh();
           });
         }}
-        className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"
+        className="text-sm rounded-full border border-emerald-300 text-emerald-800 px-3 py-1 hover:bg-emerald-50 disabled:opacity-50"
       >
-        {pending ? "…" : label}
+        {pending ? "…" : "Approve"}
       </button>
       {err && <span className="text-xs text-red-700">{err}</span>}
     </div>

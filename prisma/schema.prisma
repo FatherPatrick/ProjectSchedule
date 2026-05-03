@@ -126,10 +126,21 @@ model BusinessHours {
   active    Boolean @default(true)
 }
 
-model Setting {
-  id                 String @id
-  slotGranularityMin Int
-  allowStartAtClose  Boolean @default(false)
+/// Future-dated business-hours overrides. The schedule with the greatest
+/// `effectiveFrom <= date` provides that date's hours; if none exists the
+/// row in `BusinessHours` for that dayOfWeek is used.
+model BusinessHoursSchedule {
+  id            String   @id @default(cuid())
+  effectiveFrom DateTime // midnight UTC of the date the change takes effect (date-only semantics)
+  dayOfWeek     Int
+  openMin       Int
+  closeMin      Int
+  active        Boolean  @default(true)
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@unique([effectiveFrom, dayOfWeek])
+  @@index([effectiveFrom])
 }
 
 model NotificationLog {
@@ -152,6 +163,7 @@ enum Role {
 }
 
 enum AppointmentStatus {
+  PENDING
   CONFIRMED
   CANCELLED
   COMPLETED

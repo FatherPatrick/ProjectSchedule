@@ -31,6 +31,10 @@ export function BookingForm({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [startISO, setStartISO] = useState<string | null>(null);
+  const [proposeMode, setProposeMode] = useState(false);
+  const [customDate, setCustomDate] = useState<string>("");
+  const [customTime, setCustomTime] = useState<string>("");
+  const [customNotes, setCustomNotes] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -41,6 +45,7 @@ export function BookingForm({
   const [done, setDone] = useState<{
     when: string;
     serviceName: string;
+    pending: boolean;
   } | null>(null);
 
   const service = useMemo(
@@ -55,6 +60,7 @@ export function BookingForm({
       return;
     }
     const dateKey = format(date, "yyyy-MM-dd");
+    setCustomDate((prev) => prev || dateKey);
     setSlotsLoading(true);
     fetch(`/api/availability?serviceId=${serviceId}&date=${dateKey}`)
       .then((r) => r.json())
@@ -63,34 +69,83 @@ export function BookingForm({
       .finally(() => setSlotsLoading(false));
   }, [serviceId, date]);
 
+  // Earliest date a custom proposal is valid (24h from now in client tz).
+  const minProposeDate = useMemo(() => {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return format(d, "yyyy-MM-dd");
+  }, []);
+
+  function customStartISO(): string | null {
+    if (!customDate || !customTime) return null;
+    const local = new Date(`${customDate}T${customTime}`);
+    if (Number.isNaN(local.getTime())) return null;
+    return local.toISOString();
+  }
+
+  function customLeadOk(): boolean {
+    const iso = customStartISO();
+    if (!iso) return false;
+    return new Date(iso).getTime() - Date.now() >= 24 * 60 * 60 * 1000;
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!serviceId || !startISO) {
-      setError("Please pick a service and time.");
+    if (!serviceId) {
+      setError("Please pick a service.");
       return;
     }
     if (!agree) {
       setError("Please agree to the terms and cancellation policy.");
       return;
     }
+    let endpoint = "/api/appointments";
+    let body: Record<string, unknown> = {
+      serviceId,
+      startISO,
+      name,
+      email,
+      phone,
+      smsOptIn,
+    };
+    if (proposeMode) {
+      const iso = customStartISO();
+      if (!iso) {
+        setError("Please choose a date and time.");
+        return;
+      }
+      if (!customLeadOk()) {
+        setError("Proposed time must be at least 24 hours in advance.");
+        return;
+      }
+      endpoint = "/api/appointments/propose";
+      body = {
+        serviceId,
+        startISO: iso,
+        name,
+        email,
+        phone,
+        smsOptIn,
+        notes: customNotes || undefined,
+      };
+    } else if (!startISO) {
+      setError("Please pick a time.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/appointments", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          serviceId,
-          startISO,
-          name,
-          email,
-          phone,
-          smsOptIn,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not book.");
-      setDone({ when: data.whenLabel, serviceName: data.serviceName });
+      setDone({
+        when: data.whenLabel,
+        serviceName: data.serviceName,
+        pending: proposeMode,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -100,14 +155,42 @@ export function BookingForm({
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h2 className="text-xl font-semibold text-emerald-900">
-          You&apos;re booked!
+      <div
+        className={cn(
+          "rounded-2xl border p-6",
+          done.pending
+            ? "border-amber-200 bg-amber-50"
+            : "border-emerald-200 bg-emerald-50"
+        )}
+      >
+        <h2
+          className={cn(
+            "text-xl font-semibold",
+            done.pending ? "text-amber-900" : "text-emerald-900"
+          )}
+        >
+          {done.pending ? "Request received!" : "You're booked!"}
         </h2>
-        <p className="mt-2 text-emerald-900">
-          Your <strong>{done.serviceName}</strong> appointment is confirmed for{" "}
-          <strong>{done.when}</strong>. Check your email and texts for
-          confirmation and a 24-hour reminder.
+        <p
+          className={cn(
+            "mt-2",
+            done.pending ? "text-amber-900" : "text-emerald-900"
+          )}
+        >
+          {done.pending ? (
+            <>
+              Your <strong>{done.serviceName}</strong> proposal for{" "}
+              <strong>{done.when}</strong> has been sent for review.
+              We&apos;ll email you when it&apos;s confirmed or if we need to
+              suggest a different time.
+            </>
+          ) : (
+            <>
+              Your <strong>{done.serviceName}</strong> appointment is confirmed
+              for <strong>{done.when}</strong>. Check your email and texts for
+              confirmation and a 24-hour reminder.
+            </>
+          )}
         </p>
       </div>
     );
@@ -156,24 +239,28 @@ export function BookingForm({
             mode="single"
             selected={date}
             onSelect={setDate}
-            disabled={[
-              { before: new Date() },
-              { dayOfWeek: closedDayOfWeek },
-            ]}
+            disabled={{ before: new Date() }}
+            modifiers={{ closed: { dayOfWeek: closedDayOfWeek } }}
+            modifiersClassNames={{ closed: "text-neutral-400 italic" }}
             showOutsideDays
           />
+          <p className="mt-2 text-xs text-neutral-500">
+            Greyed-out days are normally closed. You can still pick one and
+            propose a custom time for review.
+          </p>
         </div>
       </fieldset>
 
       {/* Time */}
       {date && (
-        <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4">
+        <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4 space-y-3">
           <legend className="px-2 text-sm font-medium">3. Pick a time</legend>
           {slotsLoading ? (
             <p className="text-sm text-neutral-500">Loading times…</p>
           ) : slots.length === 0 ? (
             <p className="text-sm text-neutral-500">
-              No availability on that day. Try another date.
+              No openings on that day. Try another date or propose a custom
+              time below.
             </p>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -181,10 +268,13 @@ export function BookingForm({
                 <button
                   key={slot.startISO}
                   type="button"
-                  onClick={() => setStartISO(slot.startISO)}
+                  onClick={() => {
+                    setProposeMode(false);
+                    setStartISO(slot.startISO);
+                  }}
                   className={cn(
                     "rounded-lg border px-2 py-2 text-sm",
-                    startISO === slot.startISO
+                    !proposeMode && startISO === slot.startISO
                       ? "border-pink-600 bg-pink-50 text-pink-800"
                       : "border-neutral-200 hover:bg-neutral-50"
                   )}
@@ -194,11 +284,81 @@ export function BookingForm({
               ))}
             </div>
           )}
+
+          <div className="border-t border-neutral-200 pt-3">
+            {!proposeMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setProposeMode(true);
+                  setStartISO(null);
+                }}
+                className="text-sm rounded-full border border-pink-300 text-pink-800 px-3 py-1.5 hover:bg-pink-50"
+              >
+                None of these work? Propose a custom time
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    Propose a custom time
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setProposeMode(false)}
+                    className="text-xs text-neutral-600 underline underline-offset-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  Choose any date/time at least 24 hours from now. We&apos;ll
+                  review your request and email you to confirm.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="text-sm flex flex-col gap-1">
+                    Date
+                    <input
+                      type="date"
+                      value={customDate}
+                      min={minProposeDate}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      className="rounded-lg border border-neutral-300 px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm flex flex-col gap-1">
+                    Time
+                    <input
+                      type="time"
+                      value={customTime}
+                      onChange={(e) => setCustomTime(e.target.value)}
+                      className="rounded-lg border border-neutral-300 px-3 py-2"
+                    />
+                  </label>
+                </div>
+                <label className="text-sm flex flex-col gap-1">
+                  Notes (optional)
+                  <textarea
+                    value={customNotes}
+                    onChange={(e) => setCustomNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Anything we should know about this request?"
+                    className="rounded-lg border border-neutral-300 px-3 py-2"
+                  />
+                </label>
+                {customDate && customTime && !customLeadOk() && (
+                  <p className="text-xs text-amber-700">
+                    Proposed time must be at least 24 hours from now.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </fieldset>
       )}
 
       {/* Contact */}
-      {startISO && (
+      {(startISO || (proposeMode && customLeadOk())) && (
         <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4 space-y-3">
           <legend className="px-2 text-sm font-medium">4. Your info</legend>
           <input
@@ -270,14 +430,24 @@ export function BookingForm({
 
       <button
         type="submit"
-        disabled={!startISO || !agree || submitting}
+        disabled={
+          submitting ||
+          !agree ||
+          (proposeMode ? !customLeadOk() : !startISO)
+        }
         className="w-full rounded-full bg-pink-600 text-white py-3 font-medium disabled:bg-neutral-300"
       >
         {submitting
-          ? "Booking…"
-          : service
-            ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
-            : "Book"}
+          ? proposeMode
+            ? "Sending request…"
+            : "Booking…"
+          : proposeMode
+            ? service
+              ? `Request ${service.name}`
+              : "Send request"
+            : service
+              ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
+              : "Book"}
       </button>
     </form>
   );

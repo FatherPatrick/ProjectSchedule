@@ -14,6 +14,47 @@ export interface Slot {
   label: string;
 }
 
+/** Convert a YYYY-MM-DD business-tz date key into a midnight-UTC Date used to
+ *  match against `BusinessHoursSchedule.effectiveFrom` (date-only semantics). */
+function dateKeyToEffectiveFrom(dateKey: string): Date {
+  return new Date(`${dateKey}T00:00:00.000Z`);
+}
+
+/** Resolve the hours that apply to a specific business-tz date. Returns the
+ *  most recent scheduled override for that day-of-week with effectiveFrom <=
+ *  the date, falling back to the default `BusinessHours` row.
+ *
+ *  Returns null if the day is closed or unconfigured.
+ */
+export async function getEffectiveHoursForDate(opts: {
+  dateKey: string;
+  dayOfWeek: number;
+}): Promise<{ openMin: number; closeMin: number; active: boolean } | null> {
+  const { dateKey, dayOfWeek } = opts;
+  const cutoff = dateKeyToEffectiveFrom(dateKey);
+
+  const override = await prisma.businessHoursSchedule.findFirst({
+    where: { dayOfWeek, effectiveFrom: { lte: cutoff } },
+    orderBy: { effectiveFrom: "desc" },
+  });
+  if (override) {
+    return {
+      openMin: override.openMin,
+      closeMin: override.closeMin,
+      active: override.active,
+    };
+  }
+  const base = await prisma.businessHours.findUnique({
+    where: { dayOfWeek },
+  });
+  if (!base) return null;
+  return {
+    openMin: base.openMin,
+    closeMin: base.closeMin,
+    active: base.active,
+  };
+}
+
 /**
  * Compute available start-time slots for a given service on a given local date.
  * Honors business hours and excludes overlaps with existing confirmed
@@ -35,9 +76,7 @@ export async function getAvailableSlots(opts: {
   // Determine the day's business hours.
   const dateMidUTC = bizWallClockToUTC(dateKey, 12 * 60); // noon to avoid DST edges
   const dow = bizDayOfWeek(dateMidUTC);
-  const hours = await prisma.businessHours.findUnique({
-    where: { dayOfWeek: dow },
-  });
+  const hours = await getEffectiveHoursForDate({ dateKey, dayOfWeek: dow });
   if (!hours || !hours.active || hours.openMin >= hours.closeMin) return [];
 
   const dayStart = bizWallClockToUTC(dateKey, 0);
@@ -66,10 +105,8 @@ export async function getAvailableSlots(opts: {
   const now = new Date();
   const slots: Slot[] = [];
 
-  // Optionally allow appointments to start exactly at close time.
-  const lastStart = settings.allowStartAtClose
-    ? hours.closeMin
-    : hours.closeMin - service.durationMinutes;
+  // Last possible start so the appointment ends by closeMin.
+  const lastStart = hours.closeMin - service.durationMinutes;
 
   for (
     let m = hours.openMin;

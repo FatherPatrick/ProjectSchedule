@@ -14,30 +14,35 @@ export async function POST(
   if (!appt) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  if (appt.status !== "CONFIRMED") {
+  if (appt.status !== "CONFIRMED" && appt.status !== "PENDING") {
     return NextResponse.json(
       { error: "Appointment is not active." },
       { status: 409 }
     );
   }
-  const hoursAway = (appt.startsAt.getTime() - Date.now()) / (1000 * 60 * 60);
-  if (hoursAway < CANCELLATION_WINDOW_HOURS) {
-    return NextResponse.json(
-      {
-        error: `Cancellations require at least ${CANCELLATION_WINDOW_HOURS} hours notice.`,
-      },
-      { status: 403 }
-    );
+  if (appt.status === "CONFIRMED") {
+    const hoursAway = (appt.startsAt.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursAway < CANCELLATION_WINDOW_HOURS) {
+      return NextResponse.json(
+        {
+          error: `Cancellations require at least ${CANCELLATION_WINDOW_HOURS} hours notice.`,
+        },
+        { status: 403 }
+      );
+    }
   }
 
+  const wasConfirmed = appt.status === "CONFIRMED";
   await prisma.appointment.update({
     where: { id: appt.id },
     data: { status: "CANCELLED" },
   });
 
-  sendNotifications(appt.id, "CANCELLATION").catch((err) =>
-    console.error("[notify] cancellation failed", err)
-  );
+  if (wasConfirmed) {
+    sendNotifications(appt.id, "CANCELLATION").catch((err) =>
+      console.error("[notify] cancellation failed", err)
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }
