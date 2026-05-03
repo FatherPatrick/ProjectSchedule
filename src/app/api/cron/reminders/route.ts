@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { sendNotifications } from "@/lib/notifications";
+import { prisma } from "@/lib/db/prisma";
+import { sendNotifications } from "@/lib/integrations/notifications";
 
 // Vercel Cron will hit this hourly. We send reminders for any CONFIRMED
 // appointment in the next 23–25 hour window that hasn't already been reminded.

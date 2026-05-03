@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { sendNotifications } from "@/lib/notifications";
+import { prisma } from "@/lib/db/prisma";
+import { sendNotifications } from "@/lib/integrations/notifications";
 
 async function requireAdmin() {
   const s = await auth();

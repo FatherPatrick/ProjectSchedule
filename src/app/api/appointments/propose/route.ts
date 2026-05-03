@@ -1,20 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { nanoid } from "nanoid";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
+import { appointmentRequestSchema } from "@/lib/validation/appointments";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
-
-const bodySchema = z.object({
-  serviceId: z.string().min(1),
-  startISO: z.string().datetime(),
-  name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email(),
-  phone: z.string().trim().min(7).max(32),
-  smsOptIn: z.boolean().default(true),
-  notes: z.string().trim().max(500).optional(),
-});
 
 export async function POST(req: Request) {
   let raw: unknown;
@@ -23,7 +13,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
-  const parsed = bodySchema.safeParse(raw);
+  const parsed = appointmentRequestSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid input.", details: parsed.error.flatten() },

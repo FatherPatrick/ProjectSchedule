@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma } from "../db/prisma";
 
 const DEFAULT_GRANULARITY = 15;
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_NAME } from "@/lib/config";
 import { formatDuration, formatPrice } from "@/lib/utils";
 

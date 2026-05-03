@@ -1,10 +1,10 @@
-import { prisma } from "./prisma";
+import { prisma } from "../db/prisma";
 import {
   bizDateKey,
   bizDayOfWeek,
   bizWallClockToUTC,
   formatBiz,
-} from "./timezone";
+} from "../timezone";
 import { getSettings } from "./settings";
 
 export interface Slot {

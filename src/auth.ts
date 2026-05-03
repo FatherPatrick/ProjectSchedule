@@ -1,8 +1,8 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import Resend from "next-auth/providers/resend";
-import { prisma } from "@/lib/prisma";
-import { EMAIL_FROM } from "@/lib/email";
+import { prisma } from "@/lib/db/prisma";
+import { EMAIL_FROM } from "@/lib/integrations/email";
 
 const adminEmails = (process.env.ADMIN_EMAILS ?? "")
   .split(",")

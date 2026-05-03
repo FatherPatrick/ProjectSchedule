@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/auth";
 import { formatDuration, formatPrice } from "@/lib/utils";
 

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { CANCELLATION_WINDOW_HOURS } from "@/lib/config";
 import { CancelButton } from "./CancelButton";
@@ -19,8 +19,10 @@ export default async function ManageAppointmentPage({
   if (!appt) notFound();
 
   const when = formatBiz(appt.startsAt, "EEEE, MMM d 'at' h:mm a");
-  const hoursAway =
-    (appt.startsAt.getTime() - Date.now()) / (1000 * 60 * 60);
+  // Server component: Date.now() is evaluated at request time. The lint rule
+  // targets client-side render purity and doesn't apply here.
+  // eslint-disable-next-line react-hooks/purity
+  const hoursAway = (appt.startsAt.getTime() - Date.now()) / (1000 * 60 * 60);
   const canCancel =
     appt.status === "CONFIRMED" && hoursAway >= CANCELLATION_WINDOW_HOURS;
   const statusLabel =

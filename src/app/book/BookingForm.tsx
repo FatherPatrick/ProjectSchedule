@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
@@ -29,7 +29,6 @@ export function BookingForm({
   const [serviceId, setServiceId] = useState<string>(services[0]?.id ?? "");
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
   const [startISO, setStartISO] = useState<string | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
   const [customDate, setCustomDate] = useState<string>("");
@@ -48,32 +47,70 @@ export function BookingForm({
     pending: boolean;
   } | null>(null);
 
+  // Snapshot of "now" maintained via useSyncExternalStore so render-time logic
+  // stays pure (React 19 forbids calling Date.now() directly during render).
+  // Refreshes once a minute and on window focus.
+  const subscribeNow = useCallback((cb: () => void) => {
+    const id = setInterval(cb, 60_000);
+    window.addEventListener("focus", cb);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", cb);
+    };
+  }, []);
+  const nowMs = useSyncExternalStore(
+    subscribeNow,
+    () => Date.now(),
+    () => 0 // SSR snapshot; client effects will replace it before any time-sensitive logic runs
+  );
+
   const service = useMemo(
     () => services.find((s) => s.id === serviceId),
     [services, serviceId]
   );
 
-  useEffect(() => {
+  // Compose a stable key for the current (service, date) selection. We use it
+  // both to drive fetching and to reset the chosen slot when inputs change,
+  // avoiding a setState-in-effect call.
+  const dateKey = date ? format(date, "yyyy-MM-dd") : "";
+  const slotsKey = serviceId && dateKey ? `${serviceId}|${dateKey}` : "";
+
+  const [loadedSlotsKey, setLoadedSlotsKey] = useState("");
+  // If the slots key changed since we last loaded, the previously-selected slot
+  // is stale; clear it as derived state during render.
+  if (startISO && slotsKey !== loadedSlotsKey) {
     setStartISO(null);
-    if (!serviceId || !date) {
-      setSlots([]);
-      return;
-    }
-    const dateKey = format(date, "yyyy-MM-dd");
-    setCustomDate((prev) => prev || dateKey);
-    setSlotsLoading(true);
+  }
+
+  // Derived: only show fetched slots when they correspond to current inputs.
+  const displaySlots = slotsKey && slotsKey === loadedSlotsKey ? slots : [];
+  const slotsLoading = Boolean(slotsKey) && slotsKey !== loadedSlotsKey;
+
+  useEffect(() => {
+    if (!slotsKey) return;
+    let cancelled = false;
     fetch(`/api/availability?serviceId=${serviceId}&date=${dateKey}`)
       .then((r) => r.json())
-      .then((d) => setSlots(d.slots ?? []))
-      .catch(() => setSlots([]))
-      .finally(() => setSlotsLoading(false));
-  }, [serviceId, date]);
+      .then((d) => {
+        if (cancelled) return;
+        setSlots(d.slots ?? []);
+        setLoadedSlotsKey(slotsKey);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setLoadedSlotsKey(slotsKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slotsKey, serviceId, dateKey]);
 
   // Earliest date a custom proposal is valid (24h from now in client tz).
   const minProposeDate = useMemo(() => {
-    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    return format(d, "yyyy-MM-dd");
-  }, []);
+    if (!nowMs) return "";
+    return format(new Date(nowMs + 24 * 60 * 60 * 1000), "yyyy-MM-dd");
+  }, [nowMs]);
 
   function customStartISO(): string | null {
     if (!customDate || !customTime) return null;
@@ -83,9 +120,10 @@ export function BookingForm({
   }
 
   function customLeadOk(): boolean {
+    if (!nowMs) return false;
     const iso = customStartISO();
     if (!iso) return false;
-    return new Date(iso).getTime() - Date.now() >= 24 * 60 * 60 * 1000;
+    return new Date(iso).getTime() - nowMs >= 24 * 60 * 60 * 1000;
   }
 
   async function submit(e: React.FormEvent) {
@@ -238,7 +276,13 @@ export function BookingForm({
           <DayPicker
             mode="single"
             selected={date}
-            onSelect={setDate}
+            onSelect={(d) => {
+              setDate(d);
+              if (d) {
+                const dateKey = format(d, "yyyy-MM-dd");
+                setCustomDate((prev) => prev || dateKey);
+              }
+            }}
             disabled={{ before: new Date() }}
             modifiers={{ closed: { dayOfWeek: closedDayOfWeek } }}
             modifiersClassNames={{ closed: "text-neutral-400 italic" }}
@@ -257,14 +301,14 @@ export function BookingForm({
           <legend className="px-2 text-sm font-medium">3. Pick a time</legend>
           {slotsLoading ? (
             <p className="text-sm text-neutral-500">Loading times…</p>
-          ) : slots.length === 0 ? (
+          ) : displaySlots.length === 0 ? (
             <p className="text-sm text-neutral-500">
               No openings on that day. Try another date or propose a custom
               time below.
             </p>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {slots.map((slot) => (
+              {displaySlots.map((slot) => (
                 <button
                   key={slot.startISO}
                   type="button"

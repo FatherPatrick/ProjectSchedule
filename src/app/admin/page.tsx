@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";

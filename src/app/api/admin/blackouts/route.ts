@@ -1,29 +1,14 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { bizWallClockToUTC } from "@/lib/timezone";
+import { blackoutCreateSchema } from "@/lib/validation/blackouts";
 
 async function requireAdmin() {
   const s = await auth();
   if (!s?.user || s.user.role !== "ADMIN") return null;
   return s;
 }
-
-const bodySchema = z.object({
-  fromDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  toDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  allDay: z.boolean(),
-  startTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-  endTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .nullable(),
-  reason: z.string().max(200).nullable(),
-});
 
 function toMin(hhmm: string) {
   const [h, m] = hhmm.split(":").map(Number);
@@ -47,7 +32,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
-  const parsed = bodySchema.safeParse(raw);
+  const parsed = blackoutCreateSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input." }, { status: 400 });
   }

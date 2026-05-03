@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { BUSINESS_TIMEZONE } from "@/lib/config";
 import { BlackoutPicker, DeleteBlackoutButton } from "./BlackoutPicker";

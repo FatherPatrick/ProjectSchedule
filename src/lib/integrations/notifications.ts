@@ -1,8 +1,8 @@
-import { prisma } from "./prisma";
+import { prisma } from "../db/prisma";
 import { sendEmail } from "./email";
 import { sendSMS, withSmsFooter } from "./sms";
-import { formatBiz } from "./timezone";
-import { APP_URL, BUSINESS_NAME } from "./config";
+import { formatBiz } from "../timezone";
+import { APP_URL, BUSINESS_NAME } from "../config";
 import type {
   Appointment,
   Client,

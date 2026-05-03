@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { CancelApptButton } from "./CancelApptButton";
 import { ApproveApptButton } from "./ApproveApptButton";

@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/auth";
-import { getSettings, updateSettings } from "@/lib/settings";
+import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { bizDateKey, formatBiz } from "@/lib/timezone";
 
 export const dynamic = "force-dynamic";
