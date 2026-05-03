@@ -143,6 +143,12 @@ model BusinessHoursSchedule {
   @@index([effectiveFrom])
 }
 
+model Setting {
+  id                 String  @id
+  slotGranularityMin Int
+  allowStartAtClose  Boolean @default(false)
+}
+
 model NotificationLog {
   id            String              @id @default(cuid())
   appointmentId String
