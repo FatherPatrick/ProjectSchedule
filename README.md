@@ -43,10 +43,19 @@ Required to run end-to-end:
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string |
 | `AUTH_SECRET` | Random secret for Auth.js (`npx auth secret`) |
-| `RESEND_API_KEY` | Email sending (and magic-link sign-in) |
-| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | SMS |
+| `RESEND_API_KEY` | Email sending (transactional confirmations/reminders) |
+| `EMAIL_FROM` | `Studio Name <bookings@yourdomain.com>` (verified Resend domain) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Twilio API credentials |
+| `TWILIO_MESSAGING_SERVICE_SID` *(preferred)* or `TWILIO_FROM_NUMBER` | A2P 10DLC Messaging Service SID; falls back to a single number |
+| `TWILIO_VERIFY_SERVICE_SID` | Twilio Verify service SID — powers admin SMS sign-in OTP |
+| `ADMIN_PHONES` | Comma-separated E.164 phones (e.g. `+15555551212`) allowed to sign in as admin |
 | `CRON_SECRET` | Bearer token Vercel Cron sends to `/api/cron/reminders` |
-| `ADMIN_EMAILS` | Comma-separated emails auto-promoted to ADMIN on first sign-in |
+| `NEXT_PUBLIC_APP_URL` | Public URL used in management/cancel links |
+
+> **Twilio setup:** create a Messaging Service in the Twilio console, attach
+> your A2P-registered number(s) to it, and use that SID for
+> `TWILIO_MESSAGING_SERVICE_SID`. Create a separate **Verify** service for
+> `TWILIO_VERIFY_SERVICE_SID` (Verify uses its own SMS sender pool).
 
 ### 3. Database
 
@@ -103,7 +112,10 @@ Open <http://localhost:3000>.
 
 ## TODO
 
-- Only text confirmation/reminders for now
+- Only text confirmation/reminders for now ?
+  - finish setting this up
+- Update privacy page
+- Opt in/out of text reminders
 - Styling changes and styling customization for admins
 - Investigate personal email domains
 - Investigate email confirmation/reminders

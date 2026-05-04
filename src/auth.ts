@@ -1,45 +1,72 @@
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import Resend from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db/prisma";
-import { EMAIL_FROM } from "@/lib/integrations/email";
-
-const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+import { toE164 } from "@/lib/phone";
+import { isAdminPhone } from "@/lib/admin";
+import { checkOtp } from "@/lib/integrations/verify";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
+  // Credentials providers require JWT sessions in NextAuth v5.
+  session: { strategy: "jwt" },
   providers: [
-    Resend({
-      apiKey: process.env.RESEND_API_KEY,
-      from: EMAIL_FROM,
+    Credentials({
+      id: "sms-otp",
+      name: "SMS code",
+      credentials: {
+        phone: { label: "Phone", type: "tel" },
+        code: { label: "Code", type: "text" },
+      },
+      async authorize(creds) {
+        const phoneRaw = typeof creds?.phone === "string" ? creds.phone : "";
+        const code = typeof creds?.code === "string" ? creds.code : "";
+        const phone = toE164(phoneRaw);
+        if (!phone || !code) return null;
+
+        // Hard gate: only allow-listed admin phones may sign in.
+        if (!isAdminPhone(phone)) return null;
+
+        const ok = await checkOtp(phone, code);
+        if (!ok) return null;
+
+        // Upsert the admin user keyed by phone. Email is required + unique on
+        // the User model, so synthesize a stable placeholder if needed.
+        const existing = await prisma.user.findFirst({ where: { phone } });
+        const user = existing
+          ? await prisma.user.update({
+              where: { id: existing.id },
+              data: { role: "ADMIN" },
+            })
+          : await prisma.user.create({
+              data: {
+                phone,
+                role: "ADMIN",
+                email: `${phone.replace(/\D/g, "")}@phone.local`,
+              },
+            });
+
+        return {
+          id: user.id,
+          name: user.name ?? null,
+          email: user.email,
+          role: user.role,
+        };
+      },
     }),
   ],
-  pages: {
-    signIn: "/auth/sign-in",
-    verifyRequest: "/auth/check-email",
-  },
+  pages: { signIn: "/auth/sign-in" },
   callbacks: {
-    async signIn({ user }) {
-      if (user.email && adminEmails.includes(user.email.toLowerCase())) {
-        try {
-          await prisma.user.update({
-            where: { email: user.email },
-            data: { role: "ADMIN" },
-          });
-        } catch {
-          // user not yet persisted; PrismaAdapter creates after this hook
-        }
+    async jwt({ token, user }) {
+      if (user) {
+        token.uid = user.id;
+        token.role = (user as { role?: "CLIENT" | "ADMIN" }).role ?? "CLIENT";
       }
-      return true;
+      return token;
     },
-    async session({ session, user }) {
+    async session({ session, token }) {
       if (session.user) {
-        session.user.id = user.id;
-        session.user.role = (user as { role?: "CLIENT" | "ADMIN" }).role ?? "CLIENT";
+        session.user.id = (token.uid as string) ?? session.user.id;
+        session.user.role =
+          (token.role as "CLIENT" | "ADMIN" | undefined) ?? "CLIENT";
       }
       return session;
     },

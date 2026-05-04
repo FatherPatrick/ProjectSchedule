@@ -13,7 +13,7 @@ export default async function AdminLayout({
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
         You are signed in but do not have admin access. Ask the site owner to
-        add your email to <code>ADMIN_EMAILS</code>.
+        add your phone number to <code>ADMIN_PHONES</code>.
       </div>
     );
   }
