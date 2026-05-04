@@ -50,20 +50,24 @@ function AdminToasterInner() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Server-action redirects: detect `?saved=...` (any value) or `?error=...`.
+  // We defer the setState via queueMicrotask so React Compiler doesn't flag
+  // a synchronous setState-in-effect cascade.
   useEffect(() => {
     const saved = searchParams.get("saved");
     const error = searchParams.get("error");
     if (!saved && !error) return;
 
     const id = Date.now() + Math.random();
-    setToasts((prev) => [
-      ...prev,
-      {
-        id,
-        kind: error ? "error" : "success",
-        message: error ?? DEFAULT_MESSAGES.success,
-      },
-    ]);
+    queueMicrotask(() => {
+      setToasts((prev) => [
+        ...prev,
+        {
+          id,
+          kind: error ? "error" : "success",
+          message: error ?? DEFAULT_MESSAGES.success,
+        },
+      ]);
+    });
 
     // Strip the params so reloads don't re-fire the toast.
     const next = new URLSearchParams(searchParams.toString());

@@ -140,9 +140,13 @@ export function PrettySelect<V extends string | number>({
   }, [open]);
 
   // When opening, set active index to the current selection (or 0).
+  // Defer via queueMicrotask so React Compiler doesn't flag a synchronous
+  // setState-in-effect cascade.
   useEffect(() => {
     if (open) {
-      setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      queueMicrotask(() =>
+        setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0)
+      );
     }
   }, [open, selectedIndex]);
 

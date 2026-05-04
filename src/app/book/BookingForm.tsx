@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
@@ -54,25 +54,22 @@ export function BookingForm({
   //
   // IMPORTANT: getSnapshot must return a *stable* value between notifications,
   // otherwise React detects a changed snapshot every render and re-renders
-  // forever ("Maximum update depth exceeded"). We cache the timestamp in a
-  // module-level ref and only mutate it when the subscriber fires.
-  const nowRef = useMemo(() => ({ value: 0 }), []);
-  const subscribeNow = useCallback(
-    (cb: () => void) => {
-      nowRef.value = Date.now();
-      const tick = () => {
-        nowRef.value = Date.now();
-        cb();
-      };
-      const id = setInterval(tick, 60_000);
-      window.addEventListener("focus", tick);
-      return () => {
-        clearInterval(id);
-        window.removeEventListener("focus", tick);
-      };
-    },
-    [nowRef]
-  );
+  // forever ("Maximum update depth exceeded"). useRef gives us a stable
+  // mutable container that React Compiler is happy with.
+  const nowRef = useRef({ value: 0 });
+  const subscribeNow = useCallback((cb: () => void) => {
+    nowRef.current.value = Date.now();
+    const tick = () => {
+      nowRef.current.value = Date.now();
+      cb();
+    };
+    const id = setInterval(tick, 60_000);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", tick);
+    };
+  }, []);
   const getNowSnapshot = useCallback(() => nowRef.value, [nowRef]);
   const getNowServerSnapshot = useCallback(() => 0, []);
   const nowMs = useSyncExternalStore(

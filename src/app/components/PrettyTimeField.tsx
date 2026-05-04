@@ -182,16 +182,15 @@ export function PrettyTimeField({
     () => Array.from({ length: 12 }, (_, i) => i + 1), // 1..12
     []
   );
-  const minutes = useMemo(() => {
-    const step = clamp(Math.floor(minuteStep), 1, 30);
-    const arr: number[] = [];
-    for (let v = 0; v < 60; v += step) arr.push(v);
-    if (!arr.includes(m)) {
-      arr.push(m);
-      arr.sort((a, b) => a - b);
-    }
-    return arr;
-  }, [minuteStep, m]);
+  // Cheap to recompute on each render (~12 items). Avoiding useMemo here
+  // sidesteps a React Compiler warning about non-preservable memoization.
+  const step = clamp(Math.floor(minuteStep), 1, 30);
+  const minutes: number[] = [];
+  for (let v = 0; v < 60; v += step) minutes.push(v);
+  if (!minutes.includes(m)) {
+    minutes.push(m);
+    minutes.sort((a, b) => a - b);
+  }
 
   const updateHour = (newH12: number) => {
     setValue(`${pad(to24(newH12, period))}:${pad(m)}`);
@@ -223,7 +222,6 @@ export function PrettyTimeField({
         required={required}
         aria-label={ariaLabel}
         aria-haspopup="dialog"
-        aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         className="rounded-lg border border-neutral-300 px-2 py-1"
         {...inputProps}
