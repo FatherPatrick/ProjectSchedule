@@ -70,7 +70,7 @@ export function BookingForm({
       window.removeEventListener("focus", tick);
     };
   }, []);
-  const getNowSnapshot = useCallback(() => nowRef.value, [nowRef]);
+  const getNowSnapshot = useCallback(() => nowRef.current.value, []);
   const getNowServerSnapshot = useCallback(() => 0, []);
   const nowMs = useSyncExternalStore(
     subscribeNow,
