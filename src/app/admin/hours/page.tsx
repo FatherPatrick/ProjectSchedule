@@ -1,17 +1,36 @@
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/auth";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { bizDateKey, formatBiz } from "@/lib/timezone";
+import { PrettySelect } from "@/app/components/PrettySelect";
+import { PrettyTimeField } from "@/app/components/PrettyTimeField";
+import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
 
 export const dynamic = "force-dynamic";
 
 const DOWS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const GRANULARITY_OPTIONS = [
+  { value: 5, label: "Every 5 minutes" },
+  { value: 10, label: "Every 10 minutes" },
   { value: 15, label: "Every 15 minutes" },
+  { value: 20, label: "Every 20 minutes" },
   { value: 30, label: "Every 30 minutes" },
+  { value: 45, label: "Every 45 minutes" },
   { value: 60, label: "Every hour" },
+  { value: 90, label: "Every 1.5 hours" },
+  { value: 120, label: "Every 2 hours" },
+  { value: 150, label: "Every 2.5 hours" },
+  { value: 180, label: "Every 3 hours" },
+  { value: 210, label: "Every 3.5 hours" },
+  { value: 240, label: "Every 4 hours" },
+  { value: 270, label: "Every 4.5 hours" },
+  { value: 300, label: "Every 5 hours" },
+  { value: 330, label: "Every 5.5 hours" },
+  { value: 360, label: "Every 6 hours" },
 ];
+const ALLOWED_GRANULARITIES = GRANULARITY_OPTIONS.map((o) => o.value);
 
 async function assertAdmin() {
   const s = await auth();
@@ -34,10 +53,11 @@ async function saveHours(formData: FormData) {
     });
   }
   const granularity = Number(formData.get("granularity"));
-  if ([15, 30, 60].includes(granularity)) {
+  if (ALLOWED_GRANULARITIES.includes(granularity)) {
     await updateSettings({ slotGranularityMin: granularity });
   }
   revalidatePath("/admin/hours");
+  redirect("/admin/hours?saved=hours");
 }
 
 function toMin(hhmm: string) {
@@ -100,6 +120,7 @@ async function addScheduledChange(formData: FormData) {
     )
   );
   revalidatePath("/admin/hours");
+  redirect("/admin/hours?saved=schedule");
 }
 
 async function deleteScheduledChange(formData: FormData) {
@@ -110,9 +131,17 @@ async function deleteScheduledChange(formData: FormData) {
   const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
   await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
   revalidatePath("/admin/hours");
+  redirect("/admin/hours?saved=deleted");
 }
 
-export default async function HoursAdmin() {
+export default async function HoursAdmin({
+  searchParams,
+}: {
+  searchParams?: Promise<{ saved?: string }>;
+}) {
+  // searchParams is awaited just to keep this page dynamic; the AdminToaster
+  // in the layout reads `?saved=...` and shows the confirmation toast.
+  await searchParams;
   const todayKey = bizDateKey(new Date());
   const todayMidnightUTC = new Date(`${todayKey}T00:00:00.000Z`);
   const [rows, settings, scheduleRows] = await Promise.all([
@@ -151,9 +180,12 @@ export default async function HoursAdmin() {
         Business hours & booking interval
       </h1>
       <form
+        id="hours-form"
+        key={`hours-${settings.slotGranularityMin}`}
         action={saveHours}
         className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4"
       >
+        <UnsavedChangesGuard formId="hours-form" />
         <div className="space-y-3">
           {DOWS.map((label, d) => {
           const r = byDay.get(d);
@@ -172,20 +204,18 @@ export default async function HoursAdmin() {
               </label>
               <label className="text-sm flex items-center gap-1">
                 Open
-                <input
-                  type="time"
+                <PrettyTimeField
                   name={`open-${d}`}
                   defaultValue={fromMin(r?.openMin ?? 9 * 60)}
-                  className="rounded-lg border border-neutral-300 px-2 py-1"
+                  ariaLabel={`${label} open time`}
                 />
               </label>
               <label className="text-sm flex items-center gap-1">
                 Close
-                <input
-                  type="time"
+                <PrettyTimeField
                   name={`close-${d}`}
                   defaultValue={fromMin(r?.closeMin ?? 18 * 60)}
-                  className="rounded-lg border border-neutral-300 px-2 py-1"
+                  ariaLabel={`${label} close time`}
                 />
               </label>
             </div>
@@ -198,17 +228,14 @@ export default async function HoursAdmin() {
           <p className="text-xs text-neutral-500 mb-2">
             How often a booking start time is offered to clients.
           </p>
-          <select
+          <PrettySelect
+            key={settings.slotGranularityMin}
             name="granularity"
+            ariaLabel="Booking interval"
             defaultValue={settings.slotGranularityMin}
-            className="rounded-lg border border-neutral-300 px-3 py-2"
-          >
-            {GRANULARITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            triggerClassName="min-w-[14rem]"
+            options={GRANULARITY_OPTIONS}
+          />
         </div>
 
         <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
@@ -293,7 +320,12 @@ export default async function HoursAdmin() {
           <summary className="cursor-pointer text-sm font-medium">
             Add scheduled change
           </summary>
-          <form action={addScheduledChange} className="mt-3 space-y-3">
+          <form
+            id="scheduled-change-form"
+            action={addScheduledChange}
+            className="mt-3 space-y-3"
+          >
+            <UnsavedChangesGuard formId="scheduled-change-form" />
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm flex items-center gap-2">
                 Effective from
@@ -334,20 +366,18 @@ export default async function HoursAdmin() {
                     </label>
                     <label className="text-sm flex items-center gap-1">
                       Open
-                      <input
-                        type="time"
+                      <PrettyTimeField
                         name={`s-open-${d}`}
                         defaultValue={fromMin(r?.openMin ?? 9 * 60)}
-                        className="rounded-lg border border-neutral-300 px-2 py-1"
+                        ariaLabel={`${label} scheduled open time`}
                       />
                     </label>
                     <label className="text-sm flex items-center gap-1">
                       Close
-                      <input
-                        type="time"
+                      <PrettyTimeField
                         name={`s-close-${d}`}
                         defaultValue={fromMin(r?.closeMin ?? 18 * 60)}
-                        className="rounded-lg border border-neutral-300 px-2 py-1"
+                        ariaLabel={`${label} scheduled close time`}
                       />
                     </label>
                   </div>

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
+import { PrettyTimeField } from "@/app/components/PrettyTimeField";
+import { notifyAdminToast } from "@/app/admin/AdminToaster";
 
 export function BlackoutPicker() {
   const router = useRouter();
@@ -48,10 +50,12 @@ export function BlackoutPicker() {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setError(j.error ?? "Could not save blackout.");
+        notifyAdminToast({ kind: "error", message: j.error ?? "Could not save blackout." });
         return;
       }
       reset();
       router.refresh();
+      notifyAdminToast({ message: "Blackout added." });
     });
   }
 
@@ -89,20 +93,18 @@ export function BlackoutPicker() {
         <div className="flex flex-wrap gap-2 text-sm">
           <label className="flex items-center gap-1">
             From
-            <input
-              type="time"
+            <PrettyTimeField
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="rounded-lg border border-neutral-300 px-2 py-1"
+              onChange={setStartTime}
+              ariaLabel="Blackout start time"
             />
           </label>
           <label className="flex items-center gap-1">
             To
-            <input
-              type="time"
+            <PrettyTimeField
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="rounded-lg border border-neutral-300 px-2 py-1"
+              onChange={setEndTime}
+              ariaLabel="Blackout end time"
             />
           </label>
         </div>
@@ -153,8 +155,13 @@ export function DeleteBlackoutButton({ id }: { id: string }) {
       onClick={() => {
         if (!confirm("Remove this blackout?")) return;
         start(async () => {
-          await fetch(`/api/admin/blackouts/${id}`, { method: "DELETE" });
+          const res = await fetch(`/api/admin/blackouts/${id}`, { method: "DELETE" });
           router.refresh();
+          if (res.ok) {
+            notifyAdminToast({ message: "Blackout removed." });
+          } else {
+            notifyAdminToast({ kind: "error", message: "Could not remove blackout." });
+          }
         });
       }}
       className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"

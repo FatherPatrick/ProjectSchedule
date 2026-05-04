@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { notifyAdminToast } from "@/app/admin/AdminToaster";
 
 export function CancelApptButton({
   id,
@@ -34,9 +35,13 @@ export function CancelApptButton({
             if (!res.ok) {
               const j = await res.json().catch(() => ({}));
               setErr(j.error ?? "Could not cancel.");
+              notifyAdminToast({ kind: "error", message: j.error ?? "Could not cancel." });
               return;
             }
             router.refresh();
+            notifyAdminToast({
+              message: label === "Decline" ? "Request declined." : "Appointment cancelled.",
+            });
           });
         }}
         className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"

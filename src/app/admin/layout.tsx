@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { auth, signOut } from "@/auth";
+import AdminNav from "./AdminNav";
+import { AdminToaster } from "./AdminToaster";
 
 export default async function AdminLayout({
   children,
@@ -19,24 +20,17 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 pb-3">
-        <nav className="flex flex-wrap gap-3 text-sm">
-          <Link href="/admin" className="font-medium">
-            Dashboard
-          </Link>
-          <Link href="/admin/calendar">Calendar</Link>
-          <Link href="/admin/services">Services</Link>
-          <Link href="/admin/blackouts">Blackouts</Link>
-          <Link href="/admin/hours">Hours</Link>
-        </nav>
+    <div className="space-y-6">
+      <AdminToaster />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <AdminNav />
         <form
           action={async () => {
             "use server";
             await signOut({ redirectTo: "/" });
           }}
         >
-          <button className="text-sm text-neutral-500 hover:text-neutral-900">
+          <button className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm transition hover:border-pink-200 hover:text-pink-700">
             Sign out
           </button>
         </form>

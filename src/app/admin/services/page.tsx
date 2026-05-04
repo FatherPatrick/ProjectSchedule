@@ -1,7 +1,9 @@
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/auth";
 import { formatDuration, formatPrice } from "@/lib/utils";
+import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,7 @@ async function createService(formData: FormData) {
     },
   });
   revalidatePath("/admin/services");
+  redirect("/admin/services?saved=created");
 }
 
 async function toggleService(id: string, active: boolean) {
@@ -36,6 +39,7 @@ async function toggleService(id: string, active: boolean) {
   await assertAdmin();
   await prisma.service.update({ where: { id }, data: { active } });
   revalidatePath("/admin/services");
+  redirect("/admin/services?saved=toggled");
 }
 
 async function deleteService(id: string) {
@@ -43,6 +47,7 @@ async function deleteService(id: string) {
   await assertAdmin();
   await prisma.service.delete({ where: { id } });
   revalidatePath("/admin/services");
+  redirect("/admin/services?saved=deleted");
 }
 
 export default async function ServicesAdmin() {
@@ -55,9 +60,11 @@ export default async function ServicesAdmin() {
       <h1 className="text-2xl font-semibold tracking-tight">Services</h1>
 
       <form
+        id="new-service-form"
         action={createService}
         className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-2"
       >
+        <UnsavedChangesGuard formId="new-service-form" />
         <div className="grid sm:grid-cols-2 gap-2">
           <input
             name="name"

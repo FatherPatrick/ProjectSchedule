@@ -5,6 +5,7 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
+import { PrettyTimeField } from "@/app/components/PrettyTimeField";
 
 interface ServiceLite {
   id: string;
@@ -50,18 +51,34 @@ export function BookingForm({
   // Snapshot of "now" maintained via useSyncExternalStore so render-time logic
   // stays pure (React 19 forbids calling Date.now() directly during render).
   // Refreshes once a minute and on window focus.
-  const subscribeNow = useCallback((cb: () => void) => {
-    const id = setInterval(cb, 60_000);
-    window.addEventListener("focus", cb);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", cb);
-    };
-  }, []);
+  //
+  // IMPORTANT: getSnapshot must return a *stable* value between notifications,
+  // otherwise React detects a changed snapshot every render and re-renders
+  // forever ("Maximum update depth exceeded"). We cache the timestamp in a
+  // module-level ref and only mutate it when the subscriber fires.
+  const nowRef = useMemo(() => ({ value: 0 }), []);
+  const subscribeNow = useCallback(
+    (cb: () => void) => {
+      nowRef.value = Date.now();
+      const tick = () => {
+        nowRef.value = Date.now();
+        cb();
+      };
+      const id = setInterval(tick, 60_000);
+      window.addEventListener("focus", tick);
+      return () => {
+        clearInterval(id);
+        window.removeEventListener("focus", tick);
+      };
+    },
+    [nowRef]
+  );
+  const getNowSnapshot = useCallback(() => nowRef.value, [nowRef]);
+  const getNowServerSnapshot = useCallback(() => 0, []);
   const nowMs = useSyncExternalStore(
     subscribeNow,
-    () => Date.now(),
-    () => 0 // SSR snapshot; client effects will replace it before any time-sensitive logic runs
+    getNowSnapshot,
+    getNowServerSnapshot
   );
 
   const service = useMemo(
@@ -111,6 +128,27 @@ export function BookingForm({
     if (!nowMs) return "";
     return format(new Date(nowMs + 24 * 60 * 60 * 1000), "yyyy-MM-dd");
   }, [nowMs]);
+
+  // Stable references for react-day-picker. Passing a fresh `new Date()` or a
+  // freshly-built object on every render causes the picker's internal effects
+  // to re-run each render, which leads to "Maximum update depth exceeded".
+  // We only need day-level granularity for "today", so bucket nowMs to the
+  // start of the day in the user's timezone.
+  const todayStart = useMemo(() => {
+    if (!nowMs) return new Date(0);
+    const d = new Date(nowMs);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [nowMs]);
+  const dpDisabled = useMemo(() => ({ before: todayStart }), [todayStart]);
+  const dpModifiers = useMemo(
+    () => ({ closed: { dayOfWeek: closedDayOfWeek } }),
+    [closedDayOfWeek]
+  );
+  const dpModifiersClassNames = useMemo(
+    () => ({ closed: "text-neutral-400 italic" }),
+    []
+  );
 
   function customStartISO(): string | null {
     if (!customDate || !customTime) return null;
@@ -283,9 +321,9 @@ export function BookingForm({
                 setCustomDate((prev) => prev || dateKey);
               }
             }}
-            disabled={{ before: new Date() }}
-            modifiers={{ closed: { dayOfWeek: closedDayOfWeek } }}
-            modifiersClassNames={{ closed: "text-neutral-400 italic" }}
+            disabled={dpDisabled}
+            modifiers={dpModifiers}
+            modifiersClassNames={dpModifiersClassNames}
             showOutsideDays
           />
           <p className="mt-2 text-xs text-neutral-500">
@@ -372,11 +410,12 @@ export function BookingForm({
                   </label>
                   <label className="text-sm flex flex-col gap-1">
                     Time
-                    <input
-                      type="time"
+                    <PrettyTimeField
                       value={customTime}
-                      onChange={(e) => setCustomTime(e.target.value)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2"
+                      onChange={setCustomTime}
+                      ariaLabel="Proposed time"
+                      className="w-full"
+                      inputProps={{ className: "w-full rounded-lg border border-neutral-300 px-3 py-2" }}
                     />
                   </label>
                 </div>
