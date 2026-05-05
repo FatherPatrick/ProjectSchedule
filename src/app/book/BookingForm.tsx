@@ -38,7 +38,7 @@ export function BookingForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [smsOptIn, setSmsOptIn] = useState(true);
+  const [smsOptIn, setSmsOptIn] = useState(false);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +265,31 @@ export function BookingForm({
             </>
           )}
         </p>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setDone(null);
+              setStartISO(null);
+              setProposeMode(false);
+              setCustomDate("");
+              setCustomTime("");
+              setCustomNotes("");
+              setDate(undefined);
+              setSlots([]);
+              setLoadedSlotsKey("");
+              setError(null);
+            }}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-sm font-medium",
+              done.pending
+                ? "border-amber-300 text-amber-900 hover:bg-amber-100"
+                : "border-emerald-300 text-emerald-900 hover:bg-emerald-100"
+            )}
+          >
+            Book another appointment
+          </button>
+        </div>
       </div>
     );
   }
@@ -322,6 +347,7 @@ export function BookingForm({
             modifiers={dpModifiers}
             modifiersClassNames={dpModifiersClassNames}
             showOutsideDays
+            fixedWeeks
           />
           <p className="mt-2 text-xs text-neutral-500">
             Greyed-out days are normally closed. You can still pick one and
@@ -472,8 +498,10 @@ export function BookingForm({
               onChange={(e) => setSmsOptIn(e.target.checked)}
             />
             <span>
-              Send me confirmation and reminder text messages. Reply STOP to
-              opt out at any time. Msg & data rates may apply.
+              <strong>Yes, text me </strong>appointment confirmations and a
+              reminder before my visit at the mobile number above. Message
+              frequency varies; msg &amp; data rates may apply. Reply STOP to
+              opt out or HELP for help. Consent is not a condition of booking.
             </span>
           </label>
           <label className="flex items-start gap-2 text-sm text-neutral-700">

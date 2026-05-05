@@ -182,8 +182,9 @@ export function PrettyTimeField({
     () => Array.from({ length: 12 }, (_, i) => i + 1), // 1..12
     []
   );
-  // Cheap to recompute on each render (~12 items). Avoiding useMemo here
-  // sidesteps a React Compiler warning about non-preservable memoization.
+  // Cheap to recompute on each render (~12 items). React Compiler will
+  // memoize this automatically; doing it manually here trips the compiler
+  // (`m` may be "modified later").
   const step = clamp(Math.floor(minuteStep), 1, 30);
   const minutes: number[] = [];
   for (let v = 0; v < 60; v += step) minutes.push(v);
@@ -307,14 +308,26 @@ function ScrollColumn<V extends string | number>({
   onPick: (v: V) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
+  const didCenterRef = useRef(false);
 
+  // Center the selected item ONCE, when the column first mounts (i.e. when
+  // the popover opens). Re-running this on every selection change — or
+  // every parent re-render caused by an unrelated state change — would
+  // fight the user's own wheel/touch scrolling and make the list feel
+  // un-scrollable. We also scroll the inner list directly instead of using
+  // scrollIntoView, which would scroll ancestor scroll containers (the
+  // window/body) and cause the page to jump.
   useEffect(() => {
+    if (didCenterRef.current) return;
     const list = listRef.current;
     if (!list) return;
     const idx = values.indexOf(selected);
     if (idx < 0) return;
     const item = list.children[idx] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: "center" });
+    if (!item) return;
+    list.scrollTop =
+      item.offsetTop - list.clientHeight / 2 + item.clientHeight / 2;
+    didCenterRef.current = true;
   }, [values, selected]);
 
   return (

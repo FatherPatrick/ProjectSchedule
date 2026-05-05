@@ -114,11 +114,8 @@ Open <http://localhost:3000>.
 
 - Only text confirmation/reminders for now ?
   - finish setting this up
-- Update privacy page
-- Opt in/out of text reminders
 - Styling changes and styling customization for admins
 - Investigate personal email domains
 - Investigate email confirmation/reminders
 - Investigate making this work for many different admins
 - Investigate app for admins with website for clients
-- Name the app
