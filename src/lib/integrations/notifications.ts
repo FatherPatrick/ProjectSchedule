@@ -58,19 +58,30 @@ function reminderCopy(b: Bundle) {
   };
 }
 
-function cancellationCopy(b: Bundle) {
+function cancellationCopy(b: Bundle, note?: string) {
   const when = fmtWhen(b.startsAt);
+  const noteBlockText = note ? `\n\nA note from ${BUSINESS_NAME}:\n${note}` : "";
+  const noteBlockHtml = note
+    ? `<p><strong>A note from ${BUSINESS_NAME}:</strong><br/>${note
+        .split(/\n+/)
+        .map((line) => line.replace(/[<>&]/g, (c) =>
+          c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"
+        ))
+        .join("<br/>")}</p>`
+    : "";
+  const noteBlockSms = note ? ` Note: ${note}` : "";
   return {
     subject: `Cancelled: ${b.service.name} on ${when}`,
-    text: `Your ${b.service.name} appointment ${when} has been cancelled.`,
-    html: `<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>`,
-    sms: `${BUSINESS_NAME}: your ${b.service.name} appointment ${when} has been cancelled.`,
+    text: `Your ${b.service.name} appointment ${when} has been cancelled.${noteBlockText}`,
+    html: `<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
+    sms: `${BUSINESS_NAME}: your ${b.service.name} appointment ${when} has been cancelled.${noteBlockSms}`,
   };
 }
 
 export async function sendNotifications(
   appointmentId: string,
-  kind: NotificationKind
+  kind: NotificationKind,
+  options?: { note?: string }
 ) {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -83,7 +94,7 @@ export async function sendNotifications(
       ? confirmationCopy(appt)
       : kind === "REMINDER_24H"
         ? reminderCopy(appt)
-        : cancellationCopy(appt);
+        : cancellationCopy(appt, options?.note);
 
   // Email
   if (appt.client.emailOptIn && appt.client.email) {

@@ -10,13 +10,29 @@ async function requireAdmin() {
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+
+  // Optional JSON body: { message?: string } (clipped to a sane SMS-friendly
+  // length so the resulting text doesn't get split into many segments).
+  let note: string | undefined;
+  try {
+    const body = (await req.json().catch(() => null)) as
+      | { message?: unknown }
+      | null;
+    if (body && typeof body.message === "string") {
+      const trimmed = body.message.trim();
+      if (trimmed) note = trimmed.slice(0, 280);
+    }
+  } catch {
+    // ignore — body is optional
+  }
+
   const a = await prisma.appointment.findUnique({ where: { id } });
   if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (a.status !== "CONFIRMED" && a.status !== "PENDING") {
@@ -27,8 +43,11 @@ export async function POST(
     where: { id },
     data: { status: "CANCELLED" },
   });
-  if (wasConfirmed) {
-    sendNotifications(id, "CANCELLATION").catch((err) =>
+  // Notify the client whenever we cancel a confirmed appointment, or whenever
+  // the admin explicitly attached a message (e.g. when declining a pending
+  // request and wanting to explain why).
+  if (wasConfirmed || note) {
+    sendNotifications(id, "CANCELLATION", { note }).catch((err) =>
       console.error("[admin cancel] notify failed", err)
     );
   }
