@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import { requireAdmin } from "@/lib/admin";
 import { bizWallClockToUTC } from "@/lib/timezone";
+import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
-
-async function requireAdmin() {
-  const s = await auth();
-  if (!s?.user || s.user.role !== "ADMIN") return null;
-  return s;
-}
-
-function toMin(hhmm: string) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function nextDay(yyyyMMdd: string) {
-  const [y, m, d] = yyyyMMdd.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
-}
 
 export async function POST(req: Request) {
   if (!(await requireAdmin())) {
@@ -51,8 +34,8 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const sMin = toMin(startTime);
-    const eMin = toMin(endTime);
+    const sMin = hhmmToMinutes(startTime);
+    const eMin = hhmmToMinutes(endTime);
     if (eMin <= sMin && fromDay === toDay) {
       return NextResponse.json(
         { error: "End time must be after start time." },

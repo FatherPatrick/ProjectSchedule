@@ -1,42 +1,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { auth } from "@/auth";
+import { assertAdmin } from "@/lib/admin";
+import { parseServiceCreateForm } from "@/lib/validation/admin";
 import { formatDuration, formatPrice } from "@/lib/utils";
 import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
 import { ServiceRow } from "./ServiceRow";
 
 export const dynamic = "force-dynamic";
 
-async function assertAdmin() {
-  const s = await auth();
-  if (!s?.user || s.user.role !== "ADMIN") {
-    throw new Error("Unauthorized");
-  }
-}
-
 async function createService(formData: FormData) {
   "use server";
   await assertAdmin();
-  const name = String(formData.get("name") ?? "").trim();
-  const hoursRaw = Number(formData.get("durationHours"));
-  const minutesRaw = Number(formData.get("durationMinutes"));
-  const hours = Number.isFinite(hoursRaw) ? Math.max(0, Math.floor(hoursRaw)) : 0;
-  const minutes = Number.isFinite(minutesRaw)
-    ? Math.max(0, Math.floor(minutesRaw))
-    : 0;
-  const durationMinutes = hours * 60 + minutes;
-  const priceDollars = Number(formData.get("priceDollars"));
-  const description = String(formData.get("description") ?? "").trim() || null;
-  if (!name || durationMinutes < 5 || Number.isNaN(priceDollars)) return;
-  await prisma.service.create({
-    data: {
-      name,
-      description,
-      durationMinutes,
-      priceCents: Math.round(priceDollars * 100),
-    },
-  });
+  const data = parseServiceCreateForm(formData);
+  await prisma.service.create({ data });
   revalidatePath("/admin/services");
   redirect("/admin/services?saved=created");
 }

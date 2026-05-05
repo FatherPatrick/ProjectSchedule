@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { prisma } from "@/lib/db/prisma";
-import { sendNotifications } from "@/lib/integrations/notifications";
-
-async function requireAdmin() {
-  const s = await auth();
-  if (!s?.user || s.user.role !== "ADMIN") return null;
-  return s;
-}
+import { requireAdmin } from "@/lib/admin";
+import { cancelAppointment } from "@/lib/domain/appointments";
+import { appointmentCancelBodySchema } from "@/lib/validation/admin";
 
 export async function POST(
   req: Request,
@@ -18,38 +12,21 @@ export async function POST(
   }
   const { id } = await params;
 
-  // Optional JSON body: { message?: string } (clipped to a sane SMS-friendly
-  // length so the resulting text doesn't get split into many segments).
+  // Body is optional. If present, parse with Zod so we get consistent
+  // trimming + length-limit handling instead of ad-hoc casting.
   let note: string | undefined;
-  try {
-    const body = (await req.json().catch(() => null)) as
-      | { message?: unknown }
-      | null;
-    if (body && typeof body.message === "string") {
-      const trimmed = body.message.trim();
-      if (trimmed) note = trimmed.slice(0, 280);
+  const raw = await req.json().catch(() => null);
+  if (raw !== null) {
+    const parsed = appointmentCancelBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid input." }, { status: 400 });
     }
-  } catch {
-    // ignore — body is optional
+    note = parsed.data.message?.trim() || undefined;
   }
 
-  const a = await prisma.appointment.findUnique({ where: { id } });
-  if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (a.status !== "CONFIRMED" && a.status !== "PENDING") {
-    return NextResponse.json({ error: "Already inactive" }, { status: 409 });
-  }
-  const wasConfirmed = a.status === "CONFIRMED";
-  await prisma.appointment.update({
-    where: { id },
-    data: { status: "CANCELLED" },
-  });
-  // Notify the client whenever we cancel a confirmed appointment, or whenever
-  // the admin explicitly attached a message (e.g. when declining a pending
-  // request and wanting to explain why).
-  if (wasConfirmed || note) {
-    sendNotifications(id, "CANCELLATION", { note }).catch((err) =>
-      console.error("[admin cancel] notify failed", err)
-    );
+  const result = await cancelAppointment(id, { byAdmin: true, note });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
   return NextResponse.json({ ok: true });
 }

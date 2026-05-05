@@ -1,8 +1,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { auth } from "@/auth";
+import { assertAdmin } from "@/lib/admin";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
+import { hhmmToMinutes, minutesToHhmm } from "@/lib/domain/dates";
+import {
+  ALLOWED_GRANULARITIES,
+  parseBusinessHoursSaveForm,
+  parseScheduledChangeCreateForm,
+  parseScheduledChangeDeleteForm,
+} from "@/lib/validation/admin";
 import { bizDateKey, formatBiz } from "@/lib/timezone";
 import { PrettySelect } from "@/app/components/PrettySelect";
 import { PrettyTimeField } from "@/app/components/PrettyTimeField";
@@ -11,111 +18,76 @@ import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
 export const dynamic = "force-dynamic";
 
 const DOWS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const GRANULARITY_OPTIONS = [
-  { value: 5, label: "Every 5 minutes" },
-  { value: 10, label: "Every 10 minutes" },
-  { value: 15, label: "Every 15 minutes" },
-  { value: 20, label: "Every 20 minutes" },
-  { value: 30, label: "Every 30 minutes" },
-  { value: 45, label: "Every 45 minutes" },
-  { value: 60, label: "Every hour" },
-  { value: 90, label: "Every 1.5 hours" },
-  { value: 120, label: "Every 2 hours" },
-  { value: 150, label: "Every 2.5 hours" },
-  { value: 180, label: "Every 3 hours" },
-  { value: 210, label: "Every 3.5 hours" },
-  { value: 240, label: "Every 4 hours" },
-  { value: 270, label: "Every 4.5 hours" },
-  { value: 300, label: "Every 5 hours" },
-  { value: 330, label: "Every 5.5 hours" },
-  { value: 360, label: "Every 6 hours" },
-];
-const ALLOWED_GRANULARITIES = GRANULARITY_OPTIONS.map((o) => o.value);
-
-async function assertAdmin() {
-  const s = await auth();
-  if (!s?.user || s.user.role !== "ADMIN") throw new Error("Unauthorized");
-}
+const GRANULARITY_OPTIONS = ALLOWED_GRANULARITIES.map((value) => ({
+  value,
+  label:
+    value === 60
+      ? "Every hour"
+      : value < 60
+        ? `Every ${value} minutes`
+        : value % 60 === 0
+          ? `Every ${value / 60} hours`
+          : `Every ${(value / 60).toFixed(1)} hours`,
+}));
 
 async function saveHours(formData: FormData) {
   "use server";
   await assertAdmin();
-  for (let d = 0; d < 7; d++) {
-    const active = formData.get(`active-${d}`) === "on";
-    const open = String(formData.get(`open-${d}`) ?? "09:00");
-    const close = String(formData.get(`close-${d}`) ?? "18:00");
-    const openMin = toMin(open);
-    const closeMin = toMin(close);
-    await prisma.businessHours.upsert({
-      where: { dayOfWeek: d },
-      update: { active, openMin, closeMin },
-      create: { dayOfWeek: d, active, openMin, closeMin },
-    });
-  }
-  const granularity = Number(formData.get("granularity"));
-  if (ALLOWED_GRANULARITIES.includes(granularity)) {
-    await updateSettings({ slotGranularityMin: granularity });
-  }
+  const { granularity, days } = parseBusinessHoursSaveForm(formData);
+  await prisma.$transaction([
+    ...days.map((day, d) =>
+      prisma.businessHours.upsert({
+        where: { dayOfWeek: d },
+        update: {
+          active: day.active,
+          openMin: hhmmToMinutes(day.open),
+          closeMin: hhmmToMinutes(day.close),
+        },
+        create: {
+          dayOfWeek: d,
+          active: day.active,
+          openMin: hhmmToMinutes(day.open),
+          closeMin: hhmmToMinutes(day.close),
+        },
+      })
+    ),
+  ]);
+  await updateSettings({ slotGranularityMin: granularity });
   revalidatePath("/admin/hours");
   redirect("/admin/hours?saved=hours");
-}
-
-function toMin(hhmm: string) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function fromMin(min: number) {
-  const h = String(Math.floor(min / 60)).padStart(2, "0");
-  const m = String(min % 60).padStart(2, "0");
-  return `${h}:${m}`;
 }
 
 async function addScheduledChange(formData: FormData) {
   "use server";
   await assertAdmin();
-  const dateStr = String(formData.get("effectiveFrom") ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    throw new Error("Invalid effective date");
-  }
+  const { effectiveFrom: dateStr, note, days } =
+    parseScheduledChangeCreateForm(formData);
   const today = bizDateKey(new Date());
   if (dateStr <= today) {
     throw new Error("Effective date must be in the future");
   }
   const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
-  const note = String(formData.get("note") ?? "").trim() || null;
-
-  const data = [];
-  for (let d = 0; d < 7; d++) {
-    const active = formData.get(`s-active-${d}`) === "on";
-    const open = String(formData.get(`s-open-${d}`) ?? "09:00");
-    const close = String(formData.get(`s-close-${d}`) ?? "18:00");
-    data.push({
-      effectiveFrom,
-      dayOfWeek: d,
-      openMin: toMin(open),
-      closeMin: toMin(close),
-      active,
-      note,
-    });
-  }
 
   await prisma.$transaction(
-    data.map((row) =>
+    days.map((day, d) =>
       prisma.businessHoursSchedule.upsert({
         where: {
-          effectiveFrom_dayOfWeek: {
-            effectiveFrom: row.effectiveFrom,
-            dayOfWeek: row.dayOfWeek,
-          },
+          effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: d },
         },
         update: {
-          openMin: row.openMin,
-          closeMin: row.closeMin,
-          active: row.active,
-          note: row.note,
+          openMin: hhmmToMinutes(day.open),
+          closeMin: hhmmToMinutes(day.close),
+          active: day.active,
+          note,
         },
-        create: row,
+        create: {
+          effectiveFrom,
+          dayOfWeek: d,
+          openMin: hhmmToMinutes(day.open),
+          closeMin: hhmmToMinutes(day.close),
+          active: day.active,
+          note,
+        },
       })
     )
   );
@@ -126,8 +98,7 @@ async function addScheduledChange(formData: FormData) {
 async function deleteScheduledChange(formData: FormData) {
   "use server";
   await assertAdmin();
-  const dateStr = String(formData.get("effectiveFrom") ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+  const { effectiveFrom: dateStr } = parseScheduledChangeDeleteForm(formData);
   const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
   await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
   revalidatePath("/admin/hours");
@@ -206,7 +177,7 @@ export default async function HoursAdmin({
                 Open
                 <PrettyTimeField
                   name={`open-${d}`}
-                  defaultValue={fromMin(r?.openMin ?? 9 * 60)}
+                  defaultValue={minutesToHhmm(r?.openMin ?? 9 * 60)}
                   ariaLabel={`${label} open time`}
                 />
               </label>
@@ -214,7 +185,7 @@ export default async function HoursAdmin({
                 Close
                 <PrettyTimeField
                   name={`close-${d}`}
-                  defaultValue={fromMin(r?.closeMin ?? 18 * 60)}
+                  defaultValue={minutesToHhmm(r?.closeMin ?? 18 * 60)}
                   ariaLabel={`${label} close time`}
                 />
               </label>
@@ -301,7 +272,7 @@ export default async function HoursAdmin({
                         ? "(unchanged)"
                         : !r.active || r.openMin >= r.closeMin
                         ? "Closed"
-                        : `${fromMin(r.openMin)} – ${fromMin(r.closeMin)}`;
+                        : `${minutesToHhmm(r.openMin)} – ${minutesToHhmm(r.closeMin)}`;
                       return (
                         <li key={d} className="flex justify-between gap-2">
                           <span className="text-neutral-600">{label}</span>
@@ -368,7 +339,7 @@ export default async function HoursAdmin({
                       Open
                       <PrettyTimeField
                         name={`s-open-${d}`}
-                        defaultValue={fromMin(r?.openMin ?? 9 * 60)}
+                        defaultValue={minutesToHhmm(r?.openMin ?? 9 * 60)}
                         ariaLabel={`${label} scheduled open time`}
                       />
                     </label>
@@ -376,7 +347,7 @@ export default async function HoursAdmin({
                       Close
                       <PrettyTimeField
                         name={`s-close-${d}`}
-                        defaultValue={fromMin(r?.closeMin ?? 18 * 60)}
+                        defaultValue={minutesToHhmm(r?.closeMin ?? 18 * 60)}
                         ariaLabel={`${label} scheduled close time`}
                       />
                     </label>

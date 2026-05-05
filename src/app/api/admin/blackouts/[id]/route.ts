@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
-
-async function requireAdmin() {
-  const s = await auth();
-  if (!s?.user || s.user.role !== "ADMIN") return null;
-  return s;
-}
+import { requireAdmin } from "@/lib/admin";
 
 export async function DELETE(
   _req: Request,

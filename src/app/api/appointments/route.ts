@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
+import { findClientIdByEmail } from "@/lib/domain/clients";
 import { sendNotifications } from "@/lib/integrations/notifications";
 import { formatBiz } from "@/lib/timezone";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
@@ -57,7 +58,7 @@ export async function POST(req: Request) {
 
   // Look up or create client by email (lightweight dedupe).
   const client = await prisma.client.upsert({
-    where: { id: (await findClientId(data.email)) ?? "__nope__" },
+    where: { id: (await findClientIdByEmail(data.email)) ?? "__nope__" },
     create: {
       name: data.name,
       email: data.email.toLowerCase(),
@@ -94,12 +95,4 @@ export async function POST(req: Request) {
     serviceName: service.name,
     whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a"),
   });
-}
-
-async function findClientId(email: string): Promise<string | null> {
-  const c = await prisma.client.findFirst({
-    where: { email: email.toLowerCase() },
-    select: { id: true },
-  });
-  return c?.id ?? null;
 }
