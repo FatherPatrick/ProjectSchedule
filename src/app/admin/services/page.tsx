@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/auth";
 import { formatDuration, formatPrice } from "@/lib/utils";
 import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
+import { ServiceRow } from "./ServiceRow";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,16 @@ async function createService(formData: FormData) {
   "use server";
   await assertAdmin();
   const name = String(formData.get("name") ?? "").trim();
-  const durationMinutes = Number(formData.get("durationMinutes"));
+  const hoursRaw = Number(formData.get("durationHours"));
+  const minutesRaw = Number(formData.get("durationMinutes"));
+  const hours = Number.isFinite(hoursRaw) ? Math.max(0, Math.floor(hoursRaw)) : 0;
+  const minutes = Number.isFinite(minutesRaw)
+    ? Math.max(0, Math.floor(minutesRaw))
+    : 0;
+  const durationMinutes = hours * 60 + minutes;
   const priceDollars = Number(formData.get("priceDollars"));
   const description = String(formData.get("description") ?? "").trim() || null;
-  if (!name || !durationMinutes || Number.isNaN(priceDollars)) return;
+  if (!name || durationMinutes < 5 || Number.isNaN(priceDollars)) return;
   await prisma.service.create({
     data: {
       name,
@@ -72,15 +79,31 @@ export default async function ServicesAdmin() {
             required
             className="rounded-lg border border-neutral-300 px-3 py-2"
           />
-          <input
-            name="durationMinutes"
-            type="number"
-            min={5}
-            step={5}
-            placeholder="Duration (minutes)"
-            required
-            className="rounded-lg border border-neutral-300 px-3 py-2"
-          />
+          <div className="flex items-stretch gap-2">
+            <label className="flex-1 flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2">
+              <input
+                name="durationHours"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={0}
+                className="w-full bg-transparent outline-none"
+              />
+              <span className="text-sm text-neutral-500">hr</span>
+            </label>
+            <label className="flex-1 flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2">
+              <input
+                name="durationMinutes"
+                type="number"
+                min={0}
+                max={59}
+                step={5}
+                defaultValue={30}
+                className="w-full bg-transparent outline-none"
+              />
+              <span className="text-sm text-neutral-500">min</span>
+            </label>
+          </div>
           <input
             name="priceDollars"
             type="number"
@@ -103,29 +126,27 @@ export default async function ServicesAdmin() {
 
       <ul className="divide-y divide-neutral-200 rounded-2xl bg-white border border-neutral-200">
         {services.map((s) => (
-          <li key={s.id} className="p-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="font-medium">
-                {s.name}{" "}
-                {!s.active && <span className="text-xs text-neutral-500">(inactive)</span>}
-              </div>
-              <div className="text-sm text-neutral-500">
-                {formatDuration(s.durationMinutes)} · {formatPrice(s.priceCents)}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <form action={toggleService.bind(null, s.id, !s.active)}>
-                <button className="text-sm rounded-full border border-neutral-300 px-3 py-1">
-                  {s.active ? "Deactivate" : "Activate"}
-                </button>
-              </form>
-              <form action={deleteService.bind(null, s.id)}>
-                <button className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50">
-                  Delete
-                </button>
-              </form>
-            </div>
-          </li>
+          <ServiceRow
+            key={s.id}
+            name={s.name}
+            active={s.active}
+            description={s.description}
+            meta={`${formatDuration(s.durationMinutes)} · ${formatPrice(s.priceCents)}`}
+            actions={
+              <>
+                <form action={toggleService.bind(null, s.id, !s.active)}>
+                  <button className="text-sm rounded-full border border-neutral-300 px-3 py-1">
+                    {s.active ? "Deactivate" : "Activate"}
+                  </button>
+                </form>
+                <form action={deleteService.bind(null, s.id)}>
+                  <button className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50">
+                    Delete
+                  </button>
+                </form>
+              </>
+            }
+          />
         ))}
         {services.length === 0 && (
           <li className="p-4 text-sm text-neutral-500">

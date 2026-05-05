@@ -299,33 +299,43 @@ export function BookingForm({
       {/* Service */}
       <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4">
         <legend className="px-2 text-sm font-medium">1. Choose a service</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {services.map((s) => (
-            <label
-              key={s.id}
-              className={cn(
-                "flex items-start gap-3 rounded-xl border p-3 cursor-pointer",
-                serviceId === s.id
-                  ? "border-pink-600 bg-pink-50"
-                  : "border-neutral-200"
-              )}
-            >
-              <input
-                type="radio"
-                name="service"
-                className="mt-1"
-                checked={serviceId === s.id}
-                onChange={() => setServiceId(s.id)}
-              />
-              <span className="flex-1">
-                <span className="block font-medium">{s.name}</span>
-                <span className="block text-xs text-neutral-500">
-                  {formatDuration(s.durationMinutes)} ·{" "}
-                  {formatPrice(s.priceCents)}
+        <div className="grid gap-2 sm:grid-cols-2 items-stretch">
+          {services.map((s) => {
+            const isSelected = serviceId === s.id;
+            return (
+              <label
+                key={s.id}
+                className={cn(
+                  "flex items-start gap-3 rounded-xl border p-3 cursor-pointer min-w-0 h-full",
+                  isSelected
+                    ? "border-pink-600 bg-pink-50"
+                    : "border-neutral-200"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="service"
+                  className="mt-1 shrink-0"
+                  checked={isSelected}
+                  onChange={() => setServiceId(s.id)}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium break-words">
+                    {s.name}
+                  </span>
+                  <span className="block text-xs text-neutral-500">
+                    {formatDuration(s.durationMinutes)} ·{" "}
+                    {formatPrice(s.priceCents)}
+                  </span>
+                  {isSelected && s.description && (
+                    <span className="mt-2 block text-xs text-neutral-700 whitespace-pre-line break-words">
+                      {s.description}
+                    </span>
+                  )}
                 </span>
-              </span>
-            </label>
-          ))}
+              </label>
+            );
+          })}
         </div>
       </fieldset>
 
