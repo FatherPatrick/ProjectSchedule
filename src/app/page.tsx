@@ -39,17 +39,17 @@ export default async function Home() {
       {services.length > 0 && (
         <section>
           <h2 className="text-xl font-semibold mb-3">Services</h2>
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid gap-3 sm:grid-cols-2 items-stretch">
             {services.map((s) => (
               <li
                 key={s.id}
-                className="rounded-2xl bg-white border border-neutral-200 p-4"
+                className="rounded-2xl bg-white border border-neutral-200 p-4 h-full"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-medium">{s.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium break-words">{s.name}</h3>
                     {s.description && (
-                      <p className="text-sm text-neutral-600 mt-1">
+                      <p className="text-sm text-neutral-600 mt-1 whitespace-pre-line break-words">
                         {s.description}
                       </p>
                     )}
