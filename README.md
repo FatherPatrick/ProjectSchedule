@@ -112,6 +112,17 @@ Open <http://localhost:3000>.
 
 ## TODO
 
+- **Mobile admin app env:** before deploying the mobile auth endpoints
+  (`/api/auth/mobile/*`), set `MOBILE_TOKEN_SECRET` to a long random string
+  in production env. Falls back to `AUTH_SECRET` / `NEXTAUTH_SECRET` for dev.
+- **Mobile app identity:** replace the Expo placeholder app name, icon,
+  splash screen, and URL scheme in `mobile/app.json` before any TestFlight /
+  Play Internal build.
+- **Mobile EAS / store builds:** configure `eas.json` build profiles
+  (development / preview / production), set up Apple + Google signing
+  credentials, and wire EAS Submit for TestFlight and Play Internal Testing.
+- **In-app toasts (mobile):** replace blocking `Alert.alert` success
+  feedback with a non-blocking toast (e.g. `burnt` or `react-native-toast-message`).
 - Only text confirmation/reminders for now ?
   - finish setting this up
 - Styling changes and styling customization for admins

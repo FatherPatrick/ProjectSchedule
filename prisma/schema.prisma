@@ -9,18 +9,19 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  phone         String?
-  role          Role      @default(CLIENT)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  client        Client?
-  sessions      Session[]
+  id             String          @id @default(cuid())
+  name           String?
+  email          String          @unique
+  emailVerified  DateTime?
+  image          String?
+  phone          String?
+  role           Role            @default(CLIENT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  client         Client?
+  sessions       Session[]
+  mobileSessions MobileSession[]
 }
 
 model Account {
@@ -149,6 +150,25 @@ model Setting {
   allowStartAtClose  Boolean @default(false)
 }
 
+/// Long-lived refresh-token session for the mobile admin app. The refresh
+/// token itself is never stored; only its SHA-256 hash. Short-lived access
+/// tokens (signed JWT-like HMAC tokens) are issued from these sessions.
+model MobileSession {
+  id          String    @id @default(cuid())
+  userId      String
+  refreshHash String    @unique
+  deviceLabel String?
+  pushToken   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastUsedAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([pushToken])
+}
+
 model NotificationLog {
   id            String              @id @default(cuid())
   appointmentId String
@@ -179,6 +199,7 @@ enum AppointmentStatus {
 enum NotificationChannel {
   EMAIL
   SMS
+  PUSH
 }
 
 enum NotificationKind {

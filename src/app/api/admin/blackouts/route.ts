@@ -1,12 +1,32 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/admin";
 import { bizWallClockToUTC } from "@/lib/timezone";
 import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
 
+export async function GET(req: Request) {
+  if (!(await requireAdminEither(req))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const url = new URL(req.url);
+  const includePast = url.searchParams.get("includePast") === "true";
+  const rows = await prisma.blackout.findMany({
+    where: includePast ? {} : { endsAt: { gte: new Date() } },
+    orderBy: { startsAt: "asc" },
+  });
+  return NextResponse.json({
+    data: rows.map((b) => ({
+      id: b.id,
+      startsAt: b.startsAt.toISOString(),
+      endsAt: b.endsAt.toISOString(),
+      reason: b.reason,
+    })),
+  });
+}
+
 export async function POST(req: Request) {
-  if (!(await requireAdmin())) {
+  if (!(await requireAdminEither(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   let raw: unknown;

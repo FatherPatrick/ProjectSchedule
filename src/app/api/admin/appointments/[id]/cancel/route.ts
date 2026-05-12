@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/admin";
 import { cancelAppointment } from "@/lib/domain/appointments";
 import { appointmentCancelBodySchema } from "@/lib/validation/admin";
 
@@ -7,7 +7,7 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!(await requireAdmin())) {
+  if (!(await requireAdminEither(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await params;

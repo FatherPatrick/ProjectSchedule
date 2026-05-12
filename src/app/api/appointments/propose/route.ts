@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { findClientIdByEmail } from "@/lib/domain/clients";
 import { formatBiz } from "@/lib/timezone";
+import { pushToAdmins } from "@/lib/integrations/push";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -94,6 +95,16 @@ export async function POST(req: Request) {
       notes: data.notes,
     },
   });
+
+  // Notify admins on their phones (fire-and-forget).
+  pushToAdmins(
+    {
+      title: "New appointment request",
+      body: `${data.name} · ${service.name} · ${formatBiz(startsAt, "EEE MMM d, h:mm a")}`,
+      data: { appointmentId: appointment.id, kind: "PENDING_REQUEST" },
+    },
+    { appointmentId: appointment.id }
+  );
 
   return NextResponse.json({
     id: appointment.id,
