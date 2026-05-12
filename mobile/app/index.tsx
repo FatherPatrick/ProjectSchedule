@@ -1,6 +1,6 @@
 import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
-import { useAuth } from "@/src/auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 
 /**
  * Entry route. Decides where to send the user based on the persisted auth

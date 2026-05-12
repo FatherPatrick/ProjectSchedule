@@ -13,7 +13,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { logoutSession } from "@/src/api/auth";
+import { logoutSession } from "@/api/auth";
 import {
   clearTokens,
   loadTokens,

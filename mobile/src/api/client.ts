@@ -9,8 +9,8 @@
  * Usage:
  *   const data = await apiFetch(auth, "/api/admin/appointments?from=...&to=...");
  */
-import { API_BASE_URL } from "@/config";
-import type { AuthState } from "@/src/auth/AuthContext";
+import { API_BASE_URL } from "@/lib/config";
+import type { AuthState } from "@/auth/AuthContext";
 import { refreshTokens } from "./auth";
 
 export class ApiError extends Error {

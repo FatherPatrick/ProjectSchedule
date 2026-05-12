@@ -1,7 +1,7 @@
 import { Redirect, Tabs } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@/src/auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 
 /**
  * Guard for everything under (app). Anything reachable from here can assume

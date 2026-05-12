@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
-import { useAuth } from "@/src/auth/AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 
 export type ServiceDTO = {
   id: string;

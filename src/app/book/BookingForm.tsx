@@ -5,7 +5,7 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
-import { PrettyTimeField } from "@/app/components/PrettyTimeField";
+import { PrettyTimeField } from "@/components/PrettyTimeField";
 
 interface ServiceLite {
   id: string;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/auth/admin";
 
 /**
  * List appointments in `[from, to)`. Both bounds are ISO timestamps (UTC).

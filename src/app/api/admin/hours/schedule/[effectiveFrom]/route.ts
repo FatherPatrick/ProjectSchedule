@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/auth/admin";
 
 /**
  * Delete every override row for a given `effectiveFrom` date (YYYY-MM-DD).

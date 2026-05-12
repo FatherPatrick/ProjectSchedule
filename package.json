@@ -7,6 +7,8 @@
     "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1",
     "dev:seed": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Seed",
     "dev:fresh": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Fresh",
+    "dev:mobile": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-mobile.ps1",
+    "dev:mobile:tunnel": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev-mobile.ps1 -Tunnel",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

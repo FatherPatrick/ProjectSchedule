@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminFromBearer } from "@/lib/admin";
+import { requireAdminFromBearer } from "@/lib/auth/admin";
 
 export async function POST(req: Request) {
   const session = await requireAdminFromBearer(req);

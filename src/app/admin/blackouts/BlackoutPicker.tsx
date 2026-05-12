@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
-import { PrettyTimeField } from "@/app/components/PrettyTimeField";
+import { PrettyTimeField } from "@/components/PrettyTimeField";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
 
 export function BlackoutPicker() {

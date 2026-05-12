@@ -15,8 +15,8 @@ import {
   useApproveAppointment,
   useCancelAppointment,
   type AppointmentDTO,
-} from "@/src/api/appointments";
-import { formatDayHeader, formatTime } from "@/src/lib/dates";
+} from "@/api/appointments";
+import { formatDayHeader, formatTime } from "@/lib/dates";
 
 type Props = {
   appt: AppointmentDTO | null;

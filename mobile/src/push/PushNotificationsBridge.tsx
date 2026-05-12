@@ -16,8 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 import { router } from "expo-router";
-import { useAuth } from "@/src/auth/AuthContext";
-import { registerPushToken } from "@/src/api/push";
+import { useAuth } from "@/auth/AuthContext";
+import { registerPushToken } from "@/api/push";
 import {
   getPushPermissionStatus,
   getPushTokenIfGranted,

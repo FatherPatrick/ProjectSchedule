@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/db/prisma";
 import { toE164 } from "@/lib/phone";
-import { isAdminPhone } from "@/lib/admin";
+import { isAdminPhone } from "@/lib/auth/admin";
 import { checkOtp } from "@/lib/integrations/verify";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

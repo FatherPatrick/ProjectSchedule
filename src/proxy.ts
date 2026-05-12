@@ -11,7 +11,7 @@ export const config = {
   matcher: ["/api/admin/:path*", "/api/auth/mobile/:path*"],
 };
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   if (req.method === "OPTIONS") {
     return preflightResponse(req);
   }

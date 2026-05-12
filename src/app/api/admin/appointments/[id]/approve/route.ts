@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminEither } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/auth/admin";
 import { approveAppointment } from "@/lib/domain/appointments";
 
 export async function POST(

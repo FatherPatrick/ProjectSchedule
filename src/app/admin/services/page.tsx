@@ -1,10 +1,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { assertAdmin } from "@/lib/admin";
+import { assertAdmin } from "@/lib/auth/admin";
 import { parseServiceCreateForm } from "@/lib/validation/admin";
 import { formatDuration, formatPrice } from "@/lib/utils";
-import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
+import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
 import { ServiceRow } from "./ServiceRow";
 
 export const dynamic = "force-dynamic";

@@ -11,8 +11,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { requestOtp, verifyOtp } from "@/src/api/auth";
-import { useAuth } from "@/src/auth/AuthContext";
+import { requestOtp, verifyOtp } from "@/api/auth";
+import { useAuth } from "@/auth/AuthContext";
 
 const RESEND_SECONDS = 30;
 const CODE_LENGTH = 6;

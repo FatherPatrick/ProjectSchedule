@@ -6,9 +6,9 @@ import { useMemo } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import "react-native-reanimated";
 
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { AuthProvider } from "@/src/auth/AuthContext";
-import { PushNotificationsBridge } from "@/src/push/PushNotificationsBridge";
+import { useColorScheme } from "@/hooks/useColorScheme";
+import { AuthProvider } from "@/auth/AuthContext";
+import { PushNotificationsBridge } from "@/push/PushNotificationsBridge";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

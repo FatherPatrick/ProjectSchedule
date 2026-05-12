@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { AuthState } from "@/src/auth/AuthContext";
+import type { AuthState } from "@/auth/AuthContext";
 
 export async function registerPushToken(
   auth: AuthState,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/auth/admin";
 import { serviceReorderSchema } from "@/lib/validation/adminJson";
 
 /**

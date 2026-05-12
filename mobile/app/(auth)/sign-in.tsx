@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { requestOtp } from "@/src/api/auth";
+import { requestOtp } from "@/api/auth";
 
 export default function SignIn() {
   const [phone, setPhone] = useState("");

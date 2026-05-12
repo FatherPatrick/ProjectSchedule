@@ -2,7 +2,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { verifyAccessToken } from "@/lib/auth/mobileTokens";
-import { toE164 } from "./phone";
+import { toE164 } from "@/lib/phone";
 
 export const ADMIN_PHONES: ReadonlySet<string> = new Set(
   (process.env.ADMIN_PHONES ?? "")

@@ -8,11 +8,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { useAuth } from "@/src/auth/AuthContext";
-import { useSettings, useUpdateSettings } from "@/src/api/settings";
-import { Screen } from "@/src/components/Screen";
-import { ErrorState, LoadingState } from "@/src/components/State";
-import { ALLOWED_GRANULARITIES } from "@/src/lib/granularity";
+import { useAuth } from "@/auth/AuthContext";
+import { useSettings, useUpdateSettings } from "@/api/settings";
+import { Screen } from "@/components/Screen";
+import { ErrorState, LoadingState } from "@/components/State";
+import { ALLOWED_GRANULARITIES } from "@/lib/granularity";
 
 export default function SettingsScreen() {
   const { signOut } = useAuth();

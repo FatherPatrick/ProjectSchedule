@@ -17,13 +17,13 @@ import {
   useHours,
   useHoursSchedule,
   useSaveHours,
-} from "@/src/api/hours";
-import { Screen } from "@/src/components/Screen";
+} from "@/api/hours";
+import { Screen } from "@/components/Screen";
 import {
   dayLabel,
   minutesToHHMM,
   parseHHMM,
-} from "@/src/lib/format";
+} from "@/lib/format";
 
 /**
  * Weekly defaults editor + read-only list of future overrides (with delete).

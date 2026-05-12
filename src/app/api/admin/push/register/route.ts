@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminFromBearer } from "@/lib/admin";
+import { requireAdminFromBearer } from "@/lib/auth/admin";
 import { pushRegisterSchema } from "@/lib/validation/adminJson";
 
 /**

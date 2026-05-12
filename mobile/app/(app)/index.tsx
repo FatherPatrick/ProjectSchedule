@@ -11,10 +11,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import {
   useAppointments,
   type AppointmentDTO,
-} from "@/src/api/appointments";
-import { AppointmentDetailModal } from "@/src/components/AppointmentDetailModal";
-import { Screen } from "@/src/components/Screen";
-import { EmptyState, ErrorState, LoadingState } from "@/src/components/State";
+} from "@/api/appointments";
+import { AppointmentDetailModal } from "@/features/calendar/AppointmentDetailModal";
+import { Screen } from "@/components/Screen";
+import { EmptyState, ErrorState, LoadingState } from "@/components/State";
 import {
   addDays,
   formatDayHeader,
@@ -22,7 +22,7 @@ import {
   formatTime,
   sameLocalDay,
   startOfLocalDay,
-} from "@/src/lib/dates";
+} from "@/lib/dates";
 
 const VISIBLE_DAYS = 14;
 

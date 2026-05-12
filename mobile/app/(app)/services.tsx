@@ -21,10 +21,10 @@ import {
   useDeleteService,
   useServices,
   useUpdateService,
-} from "@/src/api/services";
-import { Screen } from "@/src/components/Screen";
-import { EmptyState, ErrorState, LoadingState } from "@/src/components/State";
-import { formatDuration, formatPrice } from "@/src/lib/format";
+} from "@/api/services";
+import { Screen } from "@/components/Screen";
+import { EmptyState, ErrorState, LoadingState } from "@/components/State";
+import { formatDuration, formatPrice } from "@/lib/format";
 
 export default function ServicesScreen() {
   const query = useServices();

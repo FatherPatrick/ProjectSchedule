@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminEither } from "@/lib/admin";
+import { requireAdminEither } from "@/lib/auth/admin";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { settingsUpdateSchema } from "@/lib/validation/adminJson";
 

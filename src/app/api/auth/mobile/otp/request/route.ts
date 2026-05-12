@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { toE164 } from "@/lib/phone";
-import { isAdminPhone } from "@/lib/admin";
+import { isAdminPhone } from "@/lib/auth/admin";
 import { sendOtp } from "@/lib/integrations/verify";
 
 /**

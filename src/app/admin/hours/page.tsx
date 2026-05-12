@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { assertAdmin } from "@/lib/admin";
+import { assertAdmin } from "@/lib/auth/admin";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/domain/dates";
 import {
@@ -11,9 +11,9 @@ import {
   parseScheduledChangeDeleteForm,
 } from "@/lib/validation/admin";
 import { bizDateKey, formatBiz } from "@/lib/timezone";
-import { PrettySelect } from "@/app/components/PrettySelect";
-import { PrettyTimeField } from "@/app/components/PrettyTimeField";
-import { UnsavedChangesGuard } from "@/app/components/UnsavedChangesGuard";
+import { PrettySelect } from "@/components/PrettySelect";
+import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
 
 export const dynamic = "force-dynamic";
 

@@ -20,15 +20,15 @@ import {
   useBlackouts,
   useCreateBlackout,
   useDeleteBlackout,
-} from "@/src/api/blackouts";
-import { Screen } from "@/src/components/Screen";
-import { EmptyState, ErrorState, LoadingState } from "@/src/components/State";
+} from "@/api/blackouts";
+import { Screen } from "@/components/Screen";
+import { EmptyState, ErrorState, LoadingState } from "@/components/State";
 import {
   formatDayHeader,
   formatTime,
   sameLocalDay,
-} from "@/src/lib/dates";
-import { isValidYMD, parseHHMM, todayYMD } from "@/src/lib/format";
+} from "@/lib/dates";
+import { isValidYMD, parseHHMM, todayYMD } from "@/lib/format";
 
 export default function BlackoutsScreen() {
   const query = useBlackouts();
