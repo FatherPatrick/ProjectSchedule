@@ -1,35 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { useApi } from "./client";
 import { useAuth } from "@/auth/AuthContext";
+import type {
+  AppSettingsDTO,
+  AppSettingsResponse,
+} from "@shared/api-types";
 
-export type AppSettingsDTO = {
-  slotGranularityMin: number;
-  allowStartAtClose: boolean;
-};
-
-type SettingsResponse = { data: AppSettingsDTO };
+export type { AppSettingsDTO } from "@shared/api-types";
 
 export function useSettings() {
-  const auth = useAuth();
+  const api = useApi();
+  const { status } = useAuth();
   return useQuery({
     queryKey: ["settings"],
-    enabled: auth.status === "signedIn",
+    enabled: status === "signedIn",
     queryFn: async () => {
-      const res = await apiFetch<SettingsResponse>(auth, `/api/admin/settings`);
+      const res = await api.get<AppSettingsResponse>(`/api/admin/settings`);
       return res.data;
     },
   });
 }
 
 export function useUpdateSettings() {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: Partial<AppSettingsDTO>) => {
-      const res = await apiFetch<SettingsResponse>(auth, `/api/admin/settings`, {
-        method: "PUT",
-        body: patch,
-      });
+      const res = await api.put<AppSettingsResponse>(
+        `/api/admin/settings`,
+        patch
+      );
       return res.data;
     },
     onSuccess: (data) => {

@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { serviceJsonCreateSchema } from "@/lib/validation/adminJson";
+import type {
+  ServiceCreateResponse,
+  ServicesListResponse,
+} from "@/lib/api-types";
 
 export async function GET(req: Request) {
   if (!(await requireAdminEither(req))) {
@@ -25,7 +29,7 @@ export async function GET(req: Request) {
       active: s.active,
       sortOrder: s.sortOrder,
     })),
-  });
+  } satisfies ServicesListResponse);
 }
 
 export async function POST(req: Request) {
@@ -52,5 +56,8 @@ export async function POST(req: Request) {
     sortOrder: sortOrder ?? 0,
   };
   const created = await prisma.service.create({ data });
-  return NextResponse.json({ data: { id: created.id } }, { status: 201 });
+  return NextResponse.json(
+    { data: { id: created.id } } satisfies ServiceCreateResponse,
+    { status: 201 }
+  );
 }

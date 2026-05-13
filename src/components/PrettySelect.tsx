@@ -266,6 +266,10 @@ export function PrettySelect<V extends string | number>({
               ref={listRef}
               id={listboxId}
               role="listbox"
+              aria-label={ariaLabel}
+              aria-activedescendant={
+                activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
+              }
               tabIndex={-1}
               onKeyDown={onListKeyDown}
               style={{
@@ -282,6 +286,7 @@ export function PrettySelect<V extends string | number>({
                 return (
                   <li
                     key={String(opt.value)}
+                    id={`${listboxId}-opt-${i}`}
                     role="option"
                     aria-selected={isSelected}
                     onMouseEnter={() => setActiveIndex(i)}

@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { findClientIdByEmail } from "@/lib/domain/clients";
+import { verifyTurnstileToken } from "@/lib/integrations/captcha";
 import { formatBiz } from "@/lib/timezone";
 import { pushToAdmins } from "@/lib/integrations/push";
+import { getClientIp } from "@/lib/rateLimit";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -15,6 +17,19 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
+
+  const captchaToken =
+    typeof raw === "object" && raw !== null && "captchaToken" in raw
+      ? (raw as { captchaToken?: unknown }).captchaToken
+      : undefined;
+  const captcha = await verifyTurnstileToken(
+    typeof captchaToken === "string" ? captchaToken : undefined,
+    getClientIp(req)
+  );
+  if (!captcha.ok) {
+    return NextResponse.json({ error: captcha.error }, { status: 400 });
+  }
+
   const parsed = appointmentRequestSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(

@@ -1,46 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { useApi } from "./client";
 import { useAuth } from "@/auth/AuthContext";
+import type {
+  AppointmentDTO,
+  AppointmentStatus,
+  AppointmentsListResponse,
+} from "@shared/api-types";
 
-export type AppointmentStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "CANCELLED"
-  | "COMPLETED"
-  | "NO_SHOW";
-
-export type AppointmentDTO = {
-  id: string;
-  startsAt: string;
-  endsAt: string;
-  status: AppointmentStatus;
-  notes: string | null;
-  client: { id: string; name: string; email: string; phone: string };
-  service: {
-    id: string;
-    name: string;
-    durationMinutes: number;
-    priceCents: number;
-  };
-};
-
-type ListResponse = { data: AppointmentDTO[] };
+export type { AppointmentDTO, AppointmentStatus } from "@shared/api-types";
 
 /**
  * Fetch the appointments overlapping `[from, to)`. Pass JS Date objects;
  * they're serialized to ISO before sending.
  */
 export function useAppointments(range: { from: Date; to: Date }) {
-  const auth = useAuth();
+  const api = useApi();
+  const { status } = useAuth();
   const fromIso = range.from.toISOString();
   const toIso = range.to.toISOString();
 
   return useQuery({
     queryKey: ["appointments", fromIso, toIso],
-    enabled: auth.status === "signedIn",
+    enabled: status === "signedIn",
     queryFn: async () => {
-      const res = await apiFetch<ListResponse>(
-        auth,
+      const res = await api.get<AppointmentsListResponse>(
         `/api/admin/appointments?from=${encodeURIComponent(
           fromIso
         )}&to=${encodeURIComponent(toIso)}`
@@ -61,7 +44,7 @@ function useAppointmentMutation<V extends { id: string }>(opts: {
   body?: (vars: V) => unknown;
   nextStatus: AppointmentStatus;
 }) {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
 
   return useMutation<
@@ -71,10 +54,7 @@ function useAppointmentMutation<V extends { id: string }>(opts: {
     { snapshots: [readonly unknown[], AppointmentDTO[] | undefined][] }
   >({
     mutationFn: async (vars) => {
-      await apiFetch(auth, opts.path(vars), {
-        method: "POST",
-        body: opts.body ? opts.body(vars) : {},
-      });
+      await api.post(opts.path(vars), opts.body ? opts.body(vars) : {});
     },
     onMutate: async (vars) => {
       await qc.cancelQueries({ queryKey: ["appointments"] });

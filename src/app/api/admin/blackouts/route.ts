@@ -4,6 +4,7 @@ import { requireAdminEither } from "@/lib/auth/admin";
 import { bizWallClockToUTC } from "@/lib/timezone";
 import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
+import type { BlackoutsListResponse } from "@/lib/api-types";
 
 export async function GET(req: Request) {
   if (!(await requireAdminEither(req))) {
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
       endsAt: b.endsAt.toISOString(),
       reason: b.reason,
     })),
-  });
+  } satisfies BlackoutsListResponse);
 }
 
 export async function POST(req: Request) {

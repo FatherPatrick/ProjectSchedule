@@ -8,6 +8,7 @@ import {
   refreshTokenExpiry,
   signAccessToken,
 } from "@/lib/auth/mobileTokens";
+import type { RefreshResult } from "@/lib/api-types";
 
 const schema = z.object({ refreshToken: z.string().min(20).max(200) });
 
@@ -87,5 +88,5 @@ export async function POST(req: Request) {
     accessTokenTtlSeconds: ACCESS_TOKEN_TTL_SECONDS,
     refreshToken: newRefresh,
     refreshTokenExpiresAt: fresh.expiresAt.toISOString(),
-  });
+  } satisfies RefreshResult);
 }

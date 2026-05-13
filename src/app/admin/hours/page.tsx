@@ -259,6 +259,7 @@ export default async function HoursAdmin({
                       />
                       <button
                         type="submit"
+                        aria-label={`Delete scheduled change effective ${display}`}
                         className="text-xs text-red-700 underline underline-offset-2"
                       >
                         Delete
@@ -314,6 +315,7 @@ export default async function HoursAdmin({
                 <input
                   type="text"
                   name="note"
+                  aria-label="Scheduled change note (optional)"
                   placeholder="Optional reason (e.g. summer hours)"
                   className="rounded-lg border border-neutral-300 px-2 py-1 w-full"
                 />

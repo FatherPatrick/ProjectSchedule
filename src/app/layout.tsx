@@ -30,8 +30,19 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-pink-50 text-neutral-900">
+        {/* Skip link: visually hidden until focused, lets keyboard users
+            jump past the persistent header on every page. */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:bg-pink-600 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-pink-300"
+        >
+          Skip to main content
+        </a>
         <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-neutral-200">
-          <nav className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between">
+          <nav
+            aria-label="Primary"
+            className="mx-auto max-w-3xl px-4 h-14 flex items-center justify-between"
+          >
             <Link href="/" className="font-semibold tracking-tight">
               {BUSINESS_NAME}
             </Link>
@@ -49,7 +60,11 @@ export default function RootLayout({
           </nav>
         </header>
 
-        <main className="flex-1 mx-auto w-full max-w-3xl px-4 py-6">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 mx-auto w-full max-w-3xl px-4 py-6 focus:outline-none"
+        >
           {children}
         </main>
 

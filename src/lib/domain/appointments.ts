@@ -1,5 +1,6 @@
 import { prisma } from "../db/prisma";
 import { sendNotifications } from "../integrations/notifications";
+import { reportError } from "../observability/reportError";
 import { CANCELLATION_WINDOW_HOURS } from "../config";
 
 /**
@@ -53,7 +54,7 @@ export async function approveAppointment(
     data: { status: "CONFIRMED" },
   });
   sendNotifications(id, "CONFIRMATION").catch((err) =>
-    console.error("[appointments] approval notify failed", err)
+    reportError(err, { where: "appointments.approve.notify", appointmentId: id })
   );
   return { ok: true };
 }
@@ -109,7 +110,7 @@ export async function cancelAppointment(
   // request and wanting to explain why).
   if (wasConfirmed || (opts.byAdmin && opts.note)) {
     sendNotifications(id, "CANCELLATION", { note: opts.note }).catch((err) =>
-      console.error("[appointments] cancel notify failed", err)
+      reportError(err, { where: "appointments.cancel.notify", appointmentId: id, byAdmin: opts.byAdmin })
     );
   }
 

@@ -2,17 +2,57 @@ import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { findClientIdByEmail } from "@/lib/domain/clients";
+import { verifyTurnstileToken } from "@/lib/integrations/captcha";
 import { sendNotifications } from "@/lib/integrations/notifications";
+import { reportError } from "@/lib/observability/reportError";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitResponseInit,
+} from "@/lib/rateLimit";
 import { formatBiz } from "@/lib/timezone";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
 
+// First-pass anti-abuse for the public booking endpoint. A captcha
+// (Turnstile / hCaptcha) is the long-term answer — see README TODO.
+const BOOKING_IP_LIMIT = 5;
+const BOOKING_WINDOW_MS = 10 * 60_000;
+
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const ipCheck = checkRateLimit({
+    bucket: "appointments:create:ip",
+    key: ip,
+    limit: BOOKING_IP_LIMIT,
+    windowMs: BOOKING_WINDOW_MS,
+  });
+  if (!ipCheck.ok) {
+    const init = rateLimitResponseInit(ipCheck);
+    return NextResponse.json(init.body, { status: 429, headers: init.headers });
+  }
+
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
+
+  // Captcha is verified BEFORE the Zod parse so a bad token can't be
+  // hidden behind unrelated validation noise. No-op when
+  // TURNSTILE_SECRET_KEY is unset (dev / local).
+  const captchaToken =
+    typeof raw === "object" && raw !== null && "captchaToken" in raw
+      ? (raw as { captchaToken?: unknown }).captchaToken
+      : undefined;
+  const captcha = await verifyTurnstileToken(
+    typeof captchaToken === "string" ? captchaToken : undefined,
+    ip
+  );
+  if (!captcha.ok) {
+    return NextResponse.json({ error: captcha.error }, { status: 400 });
+  }
+
   const parsed = appointmentRequestSchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
@@ -86,7 +126,7 @@ export async function POST(req: Request) {
 
   // Fire-and-forget notifications.
   sendNotifications(appointment.id, "CONFIRMATION").catch((err) =>
-    console.error("[notify] confirmation failed", err)
+    reportError(err, { where: "appointments.create.notify", appointmentId: appointment.id })
   );
 
   return NextResponse.json({

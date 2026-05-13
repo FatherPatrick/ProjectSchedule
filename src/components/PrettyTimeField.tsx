@@ -308,6 +308,7 @@ function ScrollColumn<V extends string | number>({
   onPick: (v: V) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
+  const labelId = useId();
   const didCenterRef = useRef(false);
 
   // Center the selected item ONCE, when the column first mounts (i.e. when
@@ -332,11 +333,15 @@ function ScrollColumn<V extends string | number>({
 
   return (
     <div className="flex flex-col items-stretch">
-      <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+      <p
+        id={labelId}
+        className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wider text-neutral-400"
+      >
         {label}
       </p>
       <ul
         ref={listRef}
+        aria-labelledby={labelId}
         className="h-44 overflow-y-auto no-scrollbar rounded-xl border border-pink-100 bg-pink-50/30 p-1"
       >
         {values.map((v) => {

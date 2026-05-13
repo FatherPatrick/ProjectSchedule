@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { businessHoursJsonSaveSchema } from "@/lib/validation/adminJson";
+import type { HoursResponse } from "@/lib/api-types";
 
 /**
  * GET — returns all 7 weekly default rows (creating any missing rows on the
@@ -25,7 +26,7 @@ export async function GET(req: Request) {
       active: r?.active ?? false,
     };
   });
-  return NextResponse.json({ data: { days } });
+  return NextResponse.json({ data: { days } } satisfies HoursResponse);
 }
 
 /**

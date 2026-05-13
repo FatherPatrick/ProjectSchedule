@@ -1,23 +1,17 @@
 import { API_BASE_URL } from "@/lib/config";
+import type {
+  LogoutResult,
+  OtpRequestResult,
+  OtpVerifyInput,
+  OtpVerifyResult,
+  RefreshResult,
+} from "@shared/api-types";
 
-export type OtpRequestResult = { ok: true };
-
-export type OtpVerifyResult = {
-  accessToken: string;
-  accessTokenExpiresAt: string;
-  accessTokenTtlSeconds: number;
-  refreshToken: string;
-  refreshTokenExpiresAt: string;
-  user: { id: string; role: "ADMIN" };
-};
-
-export type RefreshResult = {
-  accessToken: string;
-  accessTokenExpiresAt: string;
-  accessTokenTtlSeconds: number;
-  refreshToken: string;
-  refreshTokenExpiresAt: string;
-};
+export type {
+  OtpRequestResult,
+  OtpVerifyResult,
+  RefreshResult,
+} from "@shared/api-types";
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -42,11 +36,7 @@ export function requestOtp(phone: string): Promise<OtpRequestResult> {
   return postJson("/api/auth/mobile/otp/request", { phone });
 }
 
-export function verifyOtp(input: {
-  phone: string;
-  code: string;
-  deviceLabel?: string;
-}): Promise<OtpVerifyResult> {
+export function verifyOtp(input: OtpVerifyInput): Promise<OtpVerifyResult> {
   return postJson("/api/auth/mobile/otp/verify", input);
 }
 
@@ -54,6 +44,6 @@ export function refreshTokens(refreshToken: string): Promise<RefreshResult> {
   return postJson("/api/auth/mobile/refresh", { refreshToken });
 }
 
-export function logoutSession(refreshToken: string): Promise<{ ok: true }> {
+export function logoutSession(refreshToken: string): Promise<LogoutResult> {
   return postJson("/api/auth/mobile/logout", { refreshToken });
 }

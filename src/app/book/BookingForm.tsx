@@ -6,6 +6,7 @@ import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { TurnstileWidget, isCaptchaEnabled } from "@/components/TurnstileWidget";
 
 interface ServiceLite {
   id: string;
@@ -41,6 +42,8 @@ export function BookingForm({
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRequired = isCaptchaEnabled();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{
     when: string;
@@ -172,6 +175,10 @@ export function BookingForm({
       setError("Please agree to the terms and cancellation policy.");
       return;
     }
+    if (captchaRequired && !captchaToken) {
+      setError("Please complete the captcha challenge.");
+      return;
+    }
     let endpoint = "/api/appointments";
     let body: Record<string, unknown> = {
       serviceId,
@@ -180,6 +187,7 @@ export function BookingForm({
       email,
       phone,
       smsOptIn,
+      captchaToken,
     };
     if (proposeMode) {
       const iso = customStartISO();
@@ -200,6 +208,7 @@ export function BookingForm({
         phone,
         smsOptIn,
         notes: customNotes || undefined,
+        captchaToken,
       };
     } else if (!startISO) {
       setError("Please pick a time.");
@@ -214,6 +223,8 @@ export function BookingForm({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not book.");
+      // Captcha tokens are single-use — reset for any subsequent submit.
+      setCaptchaToken(null);
       setDone({
         when: data.whenLabel,
         serviceName: data.serviceName,
@@ -546,11 +557,19 @@ export function BookingForm({
         </div>
       )}
 
+      {captchaRequired && (
+        <TurnstileWidget
+          onVerify={setCaptchaToken}
+          onExpire={() => setCaptchaToken(null)}
+        />
+      )}
+
       <button
         type="submit"
         disabled={
           submitting ||
           !agree ||
+          (captchaRequired && !captchaToken) ||
           (proposeMode ? !customLeadOk() : !startISO)
         }
         className="w-full rounded-full bg-pink-600 text-white py-3 font-medium disabled:bg-neutral-300"

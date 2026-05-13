@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { businessHoursScheduleJsonCreateSchema } from "@/lib/validation/adminJson";
 import { bizDateKey } from "@/lib/timezone";
+import type { HoursOverride, HoursScheduleResponse } from "@/lib/api-types";
 
 /**
  * GET — list future overrides (`effectiveFrom > today`), grouped by date.
@@ -22,12 +23,7 @@ export async function GET(req: Request) {
   });
 
   // Group by date for caller convenience.
-  type Group = {
-    effectiveFrom: string;
-    note: string | null;
-    days: { dayOfWeek: number; openMin: number; closeMin: number; active: boolean }[];
-  };
-  const byDate = new Map<string, Group>();
+  const byDate = new Map<string, HoursOverride>();
   for (const r of rows) {
     const key = r.effectiveFrom.toISOString().slice(0, 10);
     let g = byDate.get(key);
@@ -42,7 +38,9 @@ export async function GET(req: Request) {
       active: r.active,
     });
   }
-  return NextResponse.json({ data: [...byDate.values()] });
+  return NextResponse.json({
+    data: [...byDate.values()],
+  } satisfies HoursScheduleResponse);
 }
 
 /**

@@ -52,12 +52,14 @@ export default async function ServicesAdmin() {
         <div className="grid sm:grid-cols-2 gap-2">
           <input
             name="name"
+            aria-label="Service name"
             placeholder="Name (e.g. Gel Manicure)"
             required
             className="rounded-lg border border-neutral-300 px-3 py-2"
           />
           <div className="flex items-stretch gap-2">
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2">
+              <span className="sr-only">Duration hours</span>
               <input
                 name="durationHours"
                 type="number"
@@ -66,9 +68,10 @@ export default async function ServicesAdmin() {
                 defaultValue={0}
                 className="w-full bg-transparent outline-none"
               />
-              <span className="text-sm text-neutral-500">hr</span>
+              <span aria-hidden="true" className="text-sm text-neutral-500">hr</span>
             </label>
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2">
+              <span className="sr-only">Duration minutes</span>
               <input
                 name="durationMinutes"
                 type="number"
@@ -78,7 +81,7 @@ export default async function ServicesAdmin() {
                 defaultValue={30}
                 className="w-full bg-transparent outline-none"
               />
-              <span className="text-sm text-neutral-500">min</span>
+              <span aria-hidden="true" className="text-sm text-neutral-500">min</span>
             </label>
           </div>
           <input
@@ -86,17 +89,19 @@ export default async function ServicesAdmin() {
             type="number"
             min={0}
             step="0.01"
+            aria-label="Price in US dollars"
             placeholder="Price (USD)"
             required
             className="rounded-lg border border-neutral-300 px-3 py-2"
           />
           <input
             name="description"
+            aria-label="Service description (optional)"
             placeholder="Short description (optional)"
             className="rounded-lg border border-neutral-300 px-3 py-2"
           />
         </div>
-        <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
+        <button type="submit" className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
           Add service
         </button>
       </form>
@@ -112,12 +117,20 @@ export default async function ServicesAdmin() {
             actions={
               <>
                 <form action={toggleService.bind(null, s.id, !s.active)}>
-                  <button className="text-sm rounded-full border border-neutral-300 px-3 py-1">
+                  <button
+                    type="submit"
+                    aria-label={`${s.active ? "Deactivate" : "Activate"} ${s.name}`}
+                    className="text-sm rounded-full border border-neutral-300 px-3 py-1"
+                  >
                     {s.active ? "Deactivate" : "Activate"}
                   </button>
                 </form>
                 <form action={deleteService.bind(null, s.id)}>
-                  <button className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50">
+                  <button
+                    type="submit"
+                    aria-label={`Delete ${s.name}`}
+                    className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50"
+                  >
                     Delete
                   </button>
                 </form>

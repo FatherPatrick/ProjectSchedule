@@ -105,17 +105,21 @@ function AdminToasterInner() {
     return () => timers.forEach((id) => window.clearTimeout(id));
   }, [toasts]);
 
-  if (toasts.length === 0) return null;
-
+  // Render a stable, always-present live region. Adding `aria-live` only
+  // when the first toast appears would mean screen readers miss the very
+  // first announcement (live regions must exist before content is added).
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2">
+    <div
+      aria-live="polite"
+      aria-atomic="false"
+      className="pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2"
+    >
       {toasts.map((t) => {
         const isSuccess = t.kind === "success";
         return (
           <div
             key={t.id}
             role="status"
-            aria-live="polite"
             className={[
               "pointer-events-auto rounded-2xl border px-4 py-3 shadow-xl backdrop-blur transition-all",
               isSuccess
@@ -138,6 +142,7 @@ function AdminToasterInner() {
               <p className="text-sm font-medium">{t.message}</p>
               <button
                 type="button"
+                aria-label={`Dismiss notification: ${t.message}`}
                 onClick={() =>
                   setToasts((prev) => prev.filter((x) => x.id !== t.id))
                 }

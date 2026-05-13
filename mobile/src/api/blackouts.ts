@@ -1,51 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { useApi } from "./client";
 import { useAuth } from "@/auth/AuthContext";
+import type {
+  BlackoutCreateInput,
+  BlackoutsListResponse,
+} from "@shared/api-types";
 
-export type BlackoutDTO = {
-  id: string;
-  startsAt: string; // ISO
-  endsAt: string;   // ISO
-  reason: string | null;
-};
-
-type ListResponse = { data: BlackoutDTO[] };
+export type { BlackoutDTO, BlackoutCreateInput } from "@shared/api-types";
 
 export function useBlackouts() {
-  const auth = useAuth();
+  const api = useApi();
+  const { status } = useAuth();
   return useQuery({
     queryKey: ["blackouts"],
-    enabled: auth.status === "signedIn",
+    enabled: status === "signedIn",
     queryFn: async () => {
-      const res = await apiFetch<ListResponse>(auth, `/api/admin/blackouts`);
+      const res = await api.get<BlackoutsListResponse>(`/api/admin/blackouts`);
       return res.data;
     },
   });
 }
 
-/**
- * Mirrors `blackoutCreateSchema` on the server. `fromDay`/`toDay` are
- * `YYYY-MM-DD`; `startTime`/`endTime` are `HH:MM` (only used when `allDay`
- * is false).
- */
-export type BlackoutCreateInput = {
-  fromDay: string;
-  toDay: string;
-  allDay: boolean;
-  startTime: string | null;
-  endTime: string | null;
-  reason: string | null;
-};
-
 export function useCreateBlackout() {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: BlackoutCreateInput) => {
-      await apiFetch(auth, `/api/admin/blackouts`, {
-        method: "POST",
-        body: input,
-      });
+      await api.post(`/api/admin/blackouts`, input);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["blackouts"] });
@@ -54,11 +35,11 @@ export function useCreateBlackout() {
 }
 
 export function useDeleteBlackout() {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await apiFetch(auth, `/api/admin/blackouts/${id}`, { method: "DELETE" });
+      await api.del(`/api/admin/blackouts/${id}`);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["blackouts"] });

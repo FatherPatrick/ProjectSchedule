@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { sendNotifications } from "@/lib/integrations/notifications";
+import { reportError } from "@/lib/observability/reportError";
 
 // Vercel Cron will hit this hourly. We send reminders for any CONFIRMED
 // appointment in the next 23–25 hour window that hasn't already been reminded.
@@ -38,7 +39,7 @@ export async function GET(req: Request) {
       });
       sent++;
     } catch (err) {
-      console.error("[cron] reminder failed", a.id, err);
+      reportError(err, { where: "cron.reminders.send", appointmentId: a.id });
     }
   }
 

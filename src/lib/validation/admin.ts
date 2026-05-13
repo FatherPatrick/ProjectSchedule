@@ -1,18 +1,62 @@
+/**
+ * FormData (server-action) wrappers for admin write paths.
+ *
+ * Strategy: each `parse*Form` helper does two passes —
+ *   1. A shallow form-shape parse that coerces strings → numbers / booleans
+ *      and enforces only the form-specific rules (e.g. `durationHours`
+ *      must be 0..24).
+ *   2. A second pass against the canonical JSON schema in
+ *      `./adminJson.ts`, which owns every field-level constraint shared
+ *      with the JSON endpoints (max lengths, min minutes, allowed
+ *      granularities, day-of-week coverage).
+ *
+ * That keeps the two transports validating against the same rules
+ * without forcing them through zod's `.pipe()` plumbing, which gets
+ * brittle around `.optional().nullable()` typing.
+ *
+ * Public API:
+ *   - `serviceCreateSchema` / `parseServiceCreateForm`
+ *   - `businessHoursSaveSchema` / `parseBusinessHoursSaveForm`
+ *   - `scheduledChangeCreateSchema` / `parseScheduledChangeCreateForm`
+ *   - `scheduledChangeDeleteSchema` / `parseScheduledChangeDeleteForm`
+ *   - `appointmentCancelBodySchema`
+ *   - `ALLOWED_GRANULARITIES` (re-exported for the hours admin UI)
+ */
 import { z } from "zod";
+import {
+  ALLOWED_GRANULARITIES,
+  _shared,
+  businessHoursJsonSaveSchema,
+  businessHoursScheduleJsonCreateSchema,
+  serviceJsonCreateSchema,
+  type ServiceJsonCreate,
+} from "./adminJson";
+
+export { ALLOWED_GRANULARITIES };
+
+const { granularityField, effectiveFromField, HHMM_REGEX } = _shared;
+
+const optionalNonEmptyString = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => (v ? v : null));
 
 /* -------------------------------------------------------------------------- */
 /*                                 Services                                   */
 /* -------------------------------------------------------------------------- */
 
-const hhmmRegex = /^\d{1,2}:\d{2}$/;
-
 /**
- * Raw form-shape for the "add service" form. The server action collects this
- * from FormData via {@link parseServiceCreateForm}.
+ * Raw form-shape: combines `durationHours + durationMinutes` into a single
+ * minutes integer and `priceDollars` into cents. Field-level constraints
+ * (name length, min duration, max price) are enforced by the canonical
+ * {@link serviceJsonCreateSchema} in the second pass.
  */
 export const serviceCreateSchema = z
   .object({
-    name: z.string().trim().min(1, "Name is required.").max(120),
+    name: z.string(),
     durationHours: z.coerce
       .number()
       .int("Hours must be a whole number.")
@@ -27,58 +71,65 @@ export const serviceCreateSchema = z
       .number()
       .nonnegative("Price cannot be negative.")
       .max(100_000),
-    description: z
-      .string()
-      .trim()
-      .max(2_000)
-      .optional()
-      .transform((v) => (v ? v : null)),
+    description: optionalNonEmptyString(2_000),
   })
   .transform(({ name, durationHours, durationMinutes, priceDollars, description }) => ({
     name,
     description,
     durationMinutes: durationHours * 60 + durationMinutes,
     priceCents: Math.round(priceDollars * 100),
-  }))
-  .refine((v) => v.durationMinutes >= 5, {
-    message: "Service must be at least 5 minutes long.",
-    path: ["durationMinutes"],
-  });
+  }));
 
-export type ServiceCreate = z.infer<typeof serviceCreateSchema>;
+export type ServiceCreate = ServiceJsonCreate;
 
 export function parseServiceCreateForm(fd: FormData): ServiceCreate {
-  return serviceCreateSchema.parse({
+  const intermediate = serviceCreateSchema.parse({
     name: fd.get("name") ?? "",
     durationHours: fd.get("durationHours") ?? 0,
     durationMinutes: fd.get("durationMinutes") ?? 0,
     priceDollars: fd.get("priceDollars") ?? 0,
     description: fd.get("description") ?? undefined,
   });
+  return serviceJsonCreateSchema.parse(intermediate);
 }
 
 /* -------------------------------------------------------------------------- */
 /*                              Business hours                                */
 /* -------------------------------------------------------------------------- */
 
-/** Valid booking-interval values (minutes between offered slot start times). */
-export const ALLOWED_GRANULARITIES = [
-  5, 10, 15, 20, 30, 45, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360,
-] as const;
-
-const dayHoursSchema = z.object({
+const dayHoursFormSchema = z.object({
   active: z.boolean(),
-  open: z.string().regex(hhmmRegex, "Open time must be HH:MM."),
-  close: z.string().regex(hhmmRegex, "Close time must be HH:MM."),
+  open: z.string().regex(HHMM_REGEX, "Open time must be HH:MM."),
+  close: z.string().regex(HHMM_REGEX, "Close time must be HH:MM."),
 });
 
+function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map((p) => Number.parseInt(p, 10));
+  return h * 60 + m;
+}
+
+/** Map position-indexed form days into the canonical JSON shape. */
+function formDaysToJson(
+  days: Array<{ active: boolean; open: string; close: string }>
+) {
+  return days.map((d, i) => ({
+    dayOfWeek: i,
+    openMin: hhmmToMinutes(d.open),
+    closeMin: hhmmToMinutes(d.close),
+    active: d.active,
+  }));
+}
+
+/**
+ * Output shape: `{ granularity, days: [{active, open, close}] }`. Callers
+ * use {@link parseBusinessHoursSaveForm}, which additionally re-validates
+ * the `days` array via {@link businessHoursJsonSaveSchema} so any rule
+ * added there (e.g. requiring `closeMin >= openMin`) applies to both
+ * transports automatically.
+ */
 export const businessHoursSaveSchema = z.object({
-  granularity: z
-    .coerce.number()
-    .refine((v) => (ALLOWED_GRANULARITIES as readonly number[]).includes(v), {
-      message: "Unsupported booking interval.",
-    }),
-  days: z.array(dayHoursSchema).length(7),
+  granularity: granularityField,
+  days: z.array(dayHoursFormSchema).length(7),
 });
 
 export type BusinessHoursSave = z.infer<typeof businessHoursSaveSchema>;
@@ -95,7 +146,7 @@ function parseDayHoursFromForm(
 }
 
 export function parseBusinessHoursSaveForm(fd: FormData): BusinessHoursSave {
-  return businessHoursSaveSchema.parse({
+  const value = businessHoursSaveSchema.parse({
     granularity: fd.get("granularity") ?? 30,
     days: parseDayHoursFromForm(fd, {
       active: "active",
@@ -103,23 +154,24 @@ export function parseBusinessHoursSaveForm(fd: FormData): BusinessHoursSave {
       close: "close",
     }),
   });
+  // Second pass: enforce the canonical per-day rules.
+  businessHoursJsonSaveSchema.parse({ days: formDaysToJson(value.days) });
+  return value;
 }
 
 /* -------------------------------------------------------------------------- */
 /*                          Scheduled hours changes                           */
 /* -------------------------------------------------------------------------- */
 
-const yyyyMmDdRegex = /^\d{4}-\d{2}-\d{2}$/;
-
+/**
+ * Output shape: `{ effectiveFrom, note, days: [{active, open, close}] }`.
+ * The `days` array is re-validated against the canonical JSON schema
+ * inside {@link parseScheduledChangeCreateForm}.
+ */
 export const scheduledChangeCreateSchema = z.object({
-  effectiveFrom: z.string().regex(yyyyMmDdRegex, "Invalid effective date."),
-  note: z
-    .string()
-    .trim()
-    .max(200)
-    .optional()
-    .transform((v) => (v ? v : null)),
-  days: z.array(dayHoursSchema).length(7),
+  effectiveFrom: effectiveFromField,
+  note: optionalNonEmptyString(200),
+  days: z.array(dayHoursFormSchema).length(7),
 });
 
 export type ScheduledChangeCreate = z.infer<typeof scheduledChangeCreateSchema>;
@@ -127,7 +179,7 @@ export type ScheduledChangeCreate = z.infer<typeof scheduledChangeCreateSchema>;
 export function parseScheduledChangeCreateForm(
   fd: FormData
 ): ScheduledChangeCreate {
-  return scheduledChangeCreateSchema.parse({
+  const value = scheduledChangeCreateSchema.parse({
     effectiveFrom: String(fd.get("effectiveFrom") ?? "").trim(),
     note: fd.get("note") ?? undefined,
     days: parseDayHoursFromForm(fd, {
@@ -136,10 +188,16 @@ export function parseScheduledChangeCreateForm(
       close: "s-close",
     }),
   });
+  businessHoursScheduleJsonCreateSchema.parse({
+    effectiveFrom: value.effectiveFrom,
+    note: value.note,
+    days: formDaysToJson(value.days),
+  });
+  return value;
 }
 
 export const scheduledChangeDeleteSchema = z.object({
-  effectiveFrom: z.string().regex(yyyyMmDdRegex, "Invalid effective date."),
+  effectiveFrom: effectiveFromField,
 });
 
 export type ScheduledChangeDelete = z.infer<typeof scheduledChangeDeleteSchema>;

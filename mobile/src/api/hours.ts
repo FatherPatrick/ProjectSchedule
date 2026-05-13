@@ -1,37 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { useApi } from "./client";
 import { useAuth } from "@/auth/AuthContext";
+import type {
+  DayHours,
+  HoursResponse,
+  HoursScheduleResponse,
+} from "@shared/api-types";
 
-export type DayHours = {
-  dayOfWeek: number;
-  openMin: number;
-  closeMin: number;
-  active: boolean;
-};
-
-type HoursResponse = { data: { days: DayHours[] } };
+export type { DayHours, HoursOverride } from "@shared/api-types";
 
 export function useHours() {
-  const auth = useAuth();
+  const api = useApi();
+  const { status } = useAuth();
   return useQuery({
     queryKey: ["hours"],
-    enabled: auth.status === "signedIn",
+    enabled: status === "signedIn",
     queryFn: async () => {
-      const res = await apiFetch<HoursResponse>(auth, `/api/admin/hours`);
+      const res = await api.get<HoursResponse>(`/api/admin/hours`);
       return res.data.days;
     },
   });
 }
 
 export function useSaveHours() {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (days: DayHours[]) => {
-      await apiFetch(auth, `/api/admin/hours`, {
-        method: "PUT",
-        body: { days },
-      });
+      await api.put(`/api/admin/hours`, { days });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["hours"] });
@@ -39,22 +35,14 @@ export function useSaveHours() {
   });
 }
 
-export type HoursOverride = {
-  effectiveFrom: string; // YYYY-MM-DD
-  note: string | null;
-  days: DayHours[];
-};
-
-type ScheduleResponse = { data: HoursOverride[] };
-
 export function useHoursSchedule() {
-  const auth = useAuth();
+  const api = useApi();
+  const { status } = useAuth();
   return useQuery({
     queryKey: ["hours-schedule"],
-    enabled: auth.status === "signedIn",
+    enabled: status === "signedIn",
     queryFn: async () => {
-      const res = await apiFetch<ScheduleResponse>(
-        auth,
+      const res = await api.get<HoursScheduleResponse>(
         `/api/admin/hours/schedule`
       );
       return res.data;
@@ -63,14 +51,12 @@ export function useHoursSchedule() {
 }
 
 export function useDeleteHoursOverride() {
-  const auth = useAuth();
+  const api = useApi();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (effectiveFrom: string) => {
-      await apiFetch(
-        auth,
-        `/api/admin/hours/schedule/${encodeURIComponent(effectiveFrom)}`,
-        { method: "DELETE" }
+      await api.del(
+        `/api/admin/hours/schedule/${encodeURIComponent(effectiveFrom)}`
       );
     },
     onSuccess: () => {

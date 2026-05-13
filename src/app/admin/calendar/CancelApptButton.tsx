@@ -7,9 +7,13 @@ import { notifyAdminToast } from "@/app/admin/AdminToaster";
 export function CancelApptButton({
   id,
   label = "Cancel",
+  appointmentLabel,
 }: {
   id: string;
   label?: string;
+  /** Optional human-readable appointment description (e.g. "Jane Doe at 3:00 PM")
+   *  used to disambiguate this button for screen readers. */
+  appointmentLabel?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -90,7 +94,11 @@ export function CancelApptButton({
             {pending ? "…" : isDecline ? "Decline & notify" : "Cancel & notify"}
           </button>
         </div>
-        {err && <span className="text-xs text-red-700">{err}</span>}
+        {err && (
+          <span role="alert" className="text-xs text-red-700">
+            {err}
+          </span>
+        )}
       </div>
     );
   }
@@ -99,15 +107,24 @@ export function CancelApptButton({
     <div className="flex flex-col items-end gap-1">
       <button
         disabled={pending}
+        aria-label={
+          appointmentLabel
+            ? `${label} appointment for ${appointmentLabel}`
+            : label
+        }
         onClick={() => {
           setErr(null);
           setShowForm(true);
         }}
         className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"
       >
-        {pending ? "…" : label}
+        {pending ? "\u2026" : label}
       </button>
-      {err && <span className="text-xs text-red-700">{err}</span>}
+      {err && (
+        <span role="alert" className="text-xs text-red-700">
+          {err}
+        </span>
+      )}
     </div>
   );
 }

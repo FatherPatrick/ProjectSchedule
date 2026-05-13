@@ -1,0 +1,197 @@
+/**
+ * Shared API DTOs — single source of truth for request/response shapes
+ * exchanged between the Next.js server and the Expo mobile app.
+ *
+ * Why it lives here (server `src/lib/`) rather than a top-level `shared/`
+ * folder:
+ *   - This is a single-repo, two-app project, not a monorepo. Avoiding a
+ *     new package keeps tooling minimal.
+ *   - Mobile imports types only (`import type { ... }`) via the `@shared/*`
+ *     tsconfig alias defined in `mobile/tsconfig.json`. Type-only imports
+ *     are erased by Babel before Metro sees them, so the bundler never
+ *     needs to traverse outside the `mobile/` folder.
+ *
+ * Discipline:
+ *   - Server route handlers should annotate their JSON payloads with
+ *     `satisfies <DTO>` so any drift fails the server build immediately.
+ *   - Keep this file framework-free. No imports from `next`, `react`,
+ *     `@prisma/client` value side, etc. Only types and zod-derived types
+ *     are allowed so it stays safe to consume from React Native.
+ */
+
+// ---------------------------------------------------------------------------
+// Common envelopes
+// ---------------------------------------------------------------------------
+
+/** Standard success envelope for `GET` collection / item endpoints. */
+export type DataResponse<T> = { data: T };
+
+/** Standard error envelope used by every JSON endpoint. */
+export type ErrorResponse = { error: string };
+
+// ---------------------------------------------------------------------------
+// Appointments (GET /api/admin/appointments, approve/cancel mutations)
+// ---------------------------------------------------------------------------
+
+export type AppointmentStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "CANCELLED"
+  | "COMPLETED"
+  | "NO_SHOW";
+
+export type AppointmentClientDTO = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+};
+
+export type AppointmentServiceDTO = {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  priceCents: number;
+};
+
+export type AppointmentDTO = {
+  id: string;
+  /** ISO timestamp (UTC). */
+  startsAt: string;
+  /** ISO timestamp (UTC). */
+  endsAt: string;
+  status: AppointmentStatus;
+  notes: string | null;
+  client: AppointmentClientDTO;
+  service: AppointmentServiceDTO;
+};
+
+export type AppointmentsListResponse = DataResponse<AppointmentDTO[]>;
+
+// ---------------------------------------------------------------------------
+// Services (GET/POST /api/admin/services, PATCH/DELETE /:id)
+// ---------------------------------------------------------------------------
+
+export type ServiceDTO = {
+  id: string;
+  name: string;
+  description: string | null;
+  durationMinutes: number;
+  priceCents: number;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type ServicesListResponse = DataResponse<ServiceDTO[]>;
+export type ServiceCreateResponse = DataResponse<{ id: string }>;
+
+export type ServiceCreateInput = {
+  name: string;
+  description?: string | null;
+  durationMinutes: number;
+  priceCents: number;
+  active?: boolean;
+};
+
+export type ServiceUpdateInput = Partial<ServiceCreateInput>;
+
+// ---------------------------------------------------------------------------
+// Blackouts
+// ---------------------------------------------------------------------------
+
+export type BlackoutDTO = {
+  id: string;
+  /** ISO timestamp (UTC). */
+  startsAt: string;
+  /** ISO timestamp (UTC). */
+  endsAt: string;
+  reason: string | null;
+};
+
+export type BlackoutsListResponse = DataResponse<BlackoutDTO[]>;
+
+/**
+ * Mirrors `blackoutCreateSchema` on the server. `fromDay`/`toDay` are
+ * `YYYY-MM-DD`; `startTime`/`endTime` are `HH:MM` (only used when `allDay`
+ * is false).
+ */
+export type BlackoutCreateInput = {
+  fromDay: string;
+  toDay: string;
+  allDay: boolean;
+  startTime: string | null;
+  endTime: string | null;
+  reason: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Business hours
+// ---------------------------------------------------------------------------
+
+export type DayHours = {
+  dayOfWeek: number;
+  openMin: number;
+  closeMin: number;
+  active: boolean;
+};
+
+export type HoursResponse = DataResponse<{ days: DayHours[] }>;
+
+export type HoursOverride = {
+  /** `YYYY-MM-DD` (the date the override starts taking effect). */
+  effectiveFrom: string;
+  note: string | null;
+  days: DayHours[];
+};
+
+export type HoursScheduleResponse = DataResponse<HoursOverride[]>;
+
+// ---------------------------------------------------------------------------
+// App settings
+// ---------------------------------------------------------------------------
+
+export type AppSettingsDTO = {
+  slotGranularityMin: number;
+  allowStartAtClose: boolean;
+};
+
+export type AppSettingsResponse = DataResponse<AppSettingsDTO>;
+
+// ---------------------------------------------------------------------------
+// Mobile auth (OTP request / verify / refresh / logout)
+// ---------------------------------------------------------------------------
+
+export type OtpRequestInput = { phone: string };
+export type OtpRequestResult = { ok: true };
+
+export type OtpVerifyInput = {
+  phone: string;
+  code: string;
+  deviceLabel?: string;
+};
+
+export type MobileTokenUser = { id: string; role: "ADMIN" };
+
+export type OtpVerifyResult = {
+  accessToken: string;
+  /** ISO timestamp. */
+  accessTokenExpiresAt: string;
+  accessTokenTtlSeconds: number;
+  refreshToken: string;
+  /** ISO timestamp. */
+  refreshTokenExpiresAt: string;
+  user: MobileTokenUser;
+};
+
+export type RefreshInput = { refreshToken: string };
+
+export type RefreshResult = {
+  accessToken: string;
+  accessTokenExpiresAt: string;
+  accessTokenTtlSeconds: number;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
+};
+
+export type LogoutInput = { refreshToken: string };
+export type LogoutResult = { ok: true };

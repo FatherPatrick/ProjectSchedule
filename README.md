@@ -130,53 +130,84 @@ Open <http://localhost:3000>.
 
 ### Tech debt
 
-- **Rate-limit OTP endpoints.** `/api/auth/otp/request`,
-  `/api/auth/mobile/otp/request`, and `/api/auth/mobile/otp/verify` are
-  unauthenticated and trigger Twilio SMS / Verify charges. A trivial loop
-  costs real money. Add per-IP + per-phone rate limiting (e.g. Upstash
-  Ratelimit or a small Redis token bucket) before going public.
-- **Validate env at startup.** `RESEND_API_KEY`, `TWILIO_*`, `CRON_SECRET`,
-  `MOBILE_TOKEN_SECRET`, etc. fail at request-time with cryptic errors when
-  missing. Add `src/lib/env.ts` with a zod schema and import it from
-  `instrumentation.ts` so misconfigurations crash the boot, not the request.
-- **Error monitoring.** No Sentry / equivalent. Production failures (push
-  delivery, Twilio errors, Prisma timeouts) are invisible. Wire Sentry or
-  the Vercel observability tier and capture both web + mobile.
-- **Share API DTOs between server and mobile.** `AppointmentDTO` is hand-
-  duplicated in [`mobile/src/api/appointments.ts`](mobile/src/api/appointments.ts);
-  drift will silently break the calendar. Extract a `src/lib/api-types.ts`
-  (or generate from zod) and import from both.
-- **DRY admin validation schemas.** `src/lib/validation/admin.ts` (FormData)
-  and `src/lib/validation/adminJson.ts` (JSON) restate the same field
-  constraints. Build the JSON schemas as the source of truth and derive the
-  FormData ones via `.preprocess(...)`.
-- **Reap dead Expo push tokens.** When Expo returns
-  `DeviceNotRegistered` for a token (uninstalled app, revoked perms), we log
-  but never delete it from `MobileSession.pushToken`. Tokens accumulate and
-  every notification keeps fan-outing to dead recipients. Handle the receipt
-  in `lib/integrations/push.ts` and null the column.
-- **Mobile fetch wrapper.** Every hook in `mobile/src/api/*` manually pulls
-  `state.accessToken` from `useAuth` and threads it into the fetcher. A
-  small wrapper that reads from AuthContext + auto-refreshes on 401 would
-  delete ~5 lines per file and centralize the refresh-token dance.
-- **Mobile test suite.** Zero tests on the mobile side. Highest-value
-  coverage: token refresh on 401, AuthContext hydration from SecureStore,
-  and the date-pill / availability math in the calendar screen.
-- **API integration tests.** All 22 backend tests are unit tests under
-  `src/lib/`. No coverage for the route handlers themselves
-  (`/api/availability`, `/api/appointments`, `/api/admin/*`). Add Vitest
-  HTTP-level tests using a test Postgres (Testcontainers or a CI-provisioned
-  schema) — these are where regressions actually hurt clients.
-- **Booking endpoint hardening.** `/api/appointments` accepts a phone +
-  service + start time with no captcha and no rate limit. A botnet could
-  fill the calendar. Add rate limiting and consider a low-friction
-  challenge (Cloudflare Turnstile / hCaptcha invisible mode).
-- **Structured logging.** Currently `console.log` / `console.error` only.
-  Switch to `pino` (or Vercel's structured logger) so production logs are
-  queryable by request id, route, and user.
-- **Accessibility audit on the web admin.** Mobile got a polish pass; the
-  web admin tables and forms have not been re-checked for keyboard nav,
-  focus rings, or screen-reader labels.
+- **Approve race condition.** [`approveAppointment`](src/lib/domain/appointments.ts)
+  does `findUnique` → `findFirst` (overlap check) → `update` as three
+  separate queries. Two admins approving overlapping PENDING slots at
+  the same time can both pass the conflict check. Wrap the overlap
+  check + update in `prisma.$transaction(...)` and lean on the unique
+  constraint as a safety net.
+- **Silent failure in blackout DELETE.**
+  [`/api/admin/blackouts/[id]`](src/app/api/admin/blackouts/[id]/route.ts)
+  does `prisma.blackout.delete(...).catch(() => null)` and always
+  returns 200. Hides 404s and real DB errors. Distinguish missing-row
+  from unknown error (Prisma `P2025`) and route the latter through
+  `reportError`.
+- **Test coverage gaps on production-critical flows.** `tests/api/`
+  has no coverage for `/api/cron/reminders`,
+  `/api/auth/mobile/{request,verify,refresh,logout}`, or
+  `/api/admin/push/*` — the highest-stakes endpoints (auth tokens,
+  cron-driven SMS). Add at least one happy-path + one failure test per
+  route.
+- **Repeated `try { req.json() } catch {}` boilerplate.** Present in
+  ~6+ admin and booking routes. Extract a shared `parseJsonBody(req)`
+  helper returning `{ ok, data } | { ok: false, response }` to dedupe
+  and unify the error message.
+- **Missing index for cron reminder query.** Appointment indexes are
+  `[startsAt]` and `[status, startsAt]` ([prisma/schema.prisma](prisma/schema.prisma)).
+  The reminder cron filters by
+  `status = CONFIRMED AND reminderSentAt IS NULL AND startsAt BETWEEN x AND y`
+  ([reminders/route.ts](src/app/api/cron/reminders/route.ts)). Add
+  `@@index([status, reminderSentAt, startsAt])` so the partial scan is
+  index-covered.
+- **Cron reminder loop is serial.** Same file iterates one appointment
+  at a time, awaiting `sendNotifications` then individually updating
+  `reminderSentAt`. For a busy week this serializes Twilio + Resend
+  calls and N round-trips to Postgres. Switch to `Promise.allSettled`
+  over the batch + a single `updateMany` to mark `reminderSentAt`.
+- **Mobile `auth.ts` still uses its own `postJson`.** Every other
+  mobile API file was migrated to the `useApi()` wrapper, but
+  [`mobile/src/api/auth.ts`](mobile/src/api/auth.ts) keeps a private
+  `postJson<T>` because it runs pre-auth. Either move it to
+  `mobile/src/api/client.ts` as an exported `postJsonUnauthed` (so
+  retry / error formatting / base-URL logic is shared) or document the
+  carve-out.
+- **No top-level error boundary in mobile app.**
+  [`mobile/app/_layout.tsx`](mobile/app/_layout.tsx) has no
+  `ErrorBoundary`, so any render-time crash inside the providers shows
+  the red screen in dev and a blank white screen in prod. Wrap the
+  provider tree in an error boundary that logs via `reportError` and
+  shows a "Try again" recovery UI.
+- **No scoped error boundary on the web admin.** There's a global
+  [`src/app/error.tsx`](src/app/error.tsx) and
+  [`src/app/global-error.tsx`](src/app/global-error.tsx), but no
+  `src/app/admin/error.tsx`. A crash inside an admin page bubbles to
+  the global handler and loses the admin chrome (nav, sign-out). A
+  scoped admin error boundary keeps the user oriented and offers a
+  quicker recovery path.
+- **`NotificationLog` underindexed.** Only `@@index([appointmentId])`
+  in [`prisma/schema.prisma`](prisma/schema.prisma). Once we start
+  asking "did we send a CONFIRMATION for this appt?" or "all failed
+  sends in the last hour" we'll want `@@index([appointmentId, kind])`
+  and `@@index([status, createdAt])`.
+- **Mobile vs server date-util drift.**
+  [`src/lib/domain/dates.ts`](src/lib/domain/dates.ts) and
+  [`mobile/src/lib/dates.ts`](mobile/src/lib/dates.ts) both define
+  `hhmmToMinutes` / `minutesToHhmm` etc. The mobile `@shared/*` alias
+  already exists for DTOs — extending it to host the pure date helpers
+  prevents future drift.
+- **`npm run lint:fix` script missing.**
+  [`package.json`](package.json) defines `lint` but no `lint:fix`.
+  Trivial QoL add.
+- **`UnsavedChangesGuard` does its own attribute scraping.** Lives in
+  [`src/components/UnsavedChangesGuard.tsx`](src/components/UnsavedChangesGuard.tsx)
+  and is wired into ~3 forms manually with `formId="..."`. Worth a
+  brief look to see if `useFormStatus` + a `<form>`-scoped wrapper
+  could remove the by-id coupling.
+- **Real-DB integration tests.** Layer the existing route-handler
+  tests with a Testcontainers-managed Postgres so we exercise actual
+  Prisma migrations + SQL constraints (e.g. unique `(serviceId, startsAt)`
+  in the appointment table, the `Settings` singleton row). Slower
+  suite, gated by Docker availability, run alongside `test:run`.
 - **Multi-admin / multi-tenant.** `ADMIN_PHONES` is a single env-driven
   allow-list and the schema assumes a single studio. Real multi-tenant
   support means a `Studio` model, foreign keys on every owned row, and a

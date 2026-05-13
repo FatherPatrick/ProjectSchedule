@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
 
-export function ApproveApptButton({ id }: { id: string }) {
+export function ApproveApptButton({
+  id,
+  appointmentLabel,
+}: {
+  id: string;
+  appointmentLabel?: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -13,6 +19,11 @@ export function ApproveApptButton({ id }: { id: string }) {
     <div className="flex flex-col items-end gap-1">
       <button
         disabled={pending}
+        aria-label={
+          appointmentLabel
+            ? `Approve appointment for ${appointmentLabel}`
+            : "Approve"
+        }
         onClick={() => {
           start(async () => {
             const res = await fetch(`/api/admin/appointments/${id}/approve`, {
@@ -32,7 +43,11 @@ export function ApproveApptButton({ id }: { id: string }) {
       >
         {pending ? "…" : "Approve"}
       </button>
-      {err && <span className="text-xs text-red-700">{err}</span>}
+      {err && (
+        <span role="alert" className="text-xs text-red-700">
+          {err}
+        </span>
+      )}
     </div>
   );
 }

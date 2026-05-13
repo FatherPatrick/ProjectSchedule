@@ -111,6 +111,7 @@ export function BlackoutPicker() {
       )}
 
       <input
+        aria-label="Blackout reason (optional)"
         placeholder="Reason (optional)"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -118,7 +119,10 @@ export function BlackoutPicker() {
       />
 
       {error && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+        <p
+          role="alert"
+          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2"
+        >
           {error}
         </p>
       )}
@@ -146,12 +150,21 @@ export function BlackoutPicker() {
   );
 }
 
-export function DeleteBlackoutButton({ id }: { id: string }) {
+export function DeleteBlackoutButton({
+  id,
+  label,
+}: {
+  id: string;
+  /** Optional human-readable description used to disambiguate the button
+   *  for screen readers (e.g. "Friday, May 15"). */
+  label?: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
     <button
       disabled={pending}
+      aria-label={label ? `Remove blackout ${label}` : "Remove blackout"}
       onClick={() => {
         if (!confirm("Remove this blackout?")) return;
         start(async () => {

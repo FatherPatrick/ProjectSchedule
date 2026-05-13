@@ -50,7 +50,16 @@ export default async function BlackoutsAdmin() {
                     <div className="text-sm text-neutral-500">{b.reason}</div>
                   )}
                 </div>
-                <DeleteBlackoutButton id={b.id} />
+                <DeleteBlackoutButton
+                  id={b.id}
+                  label={
+                    allDay
+                      ? sameDay
+                        ? formatBiz(b.startsAt, "EEEE, MMM d")
+                        : `${formatBiz(b.startsAt, "MMM d")} to ${formatBiz(new Date(b.endsAt.getTime() - 1), "MMM d, yyyy")}`
+                      : `${formatBiz(b.startsAt, "MMM d, h:mm a")} to ${formatBiz(b.endsAt, "h:mm a")}`
+                  }
+                />
               </li>
             );
           })}

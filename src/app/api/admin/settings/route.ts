@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { settingsUpdateSchema } from "@/lib/validation/adminJson";
+import type { AppSettingsResponse } from "@/lib/api-types";
 
 export async function GET(req: Request) {
   if (!(await requireAdminEither(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const s = await getSettings();
-  return NextResponse.json({ data: s });
+  return NextResponse.json({ data: s } satisfies AppSettingsResponse);
 }
 
 export async function PUT(req: Request) {
@@ -30,5 +31,5 @@ export async function PUT(req: Request) {
   }
   await updateSettings(parsed.data);
   const fresh = await getSettings();
-  return NextResponse.json({ data: fresh });
+  return NextResponse.json({ data: fresh } satisfies AppSettingsResponse);
 }

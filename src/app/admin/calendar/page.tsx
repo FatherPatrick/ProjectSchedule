@@ -62,8 +62,15 @@ export default async function AdminCalendar() {
                   )}
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
-                  <ApproveApptButton id={a.id} />
-                  <CancelApptButton id={a.id} label="Decline" />
+                  <ApproveApptButton
+                    id={a.id}
+                    appointmentLabel={`${a.client.name} on ${formatBiz(a.startsAt, "EEE MMM d")} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                  />
+                  <CancelApptButton
+                    id={a.id}
+                    label="Decline"
+                    appointmentLabel={`${a.client.name} on ${formatBiz(a.startsAt, "EEE MMM d")} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                  />
                 </div>
               </li>
             ))}
@@ -97,7 +104,10 @@ export default async function AdminCalendar() {
                   </div>
                 </div>
                 {a.status === "CONFIRMED" && (
-                  <CancelApptButton id={a.id} />
+                  <CancelApptButton
+                    id={a.id}
+                    appointmentLabel={`${a.client.name} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                  />
                 )}
               </li>
             ))}

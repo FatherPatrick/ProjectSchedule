@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdminEither } from "@/lib/auth/admin";
+import type { AppointmentsListResponse } from "@/lib/api-types";
 
 /**
  * List appointments in `[from, to)`. Both bounds are ISO timestamps (UTC).
@@ -85,5 +86,5 @@ export async function GET(req: Request) {
       client: r.client,
       service: r.service,
     })),
-  });
+  } satisfies AppointmentsListResponse);
 }

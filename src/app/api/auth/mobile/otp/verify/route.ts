@@ -11,12 +11,24 @@ import {
   refreshTokenExpiry,
   signAccessToken,
 } from "@/lib/auth/mobileTokens";
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitResponseInit,
+} from "@/lib/rateLimit";
+import type { OtpVerifyResult } from "@/lib/api-types";
 
 const schema = z.object({
   phone: z.string().min(7).max(32),
   code: z.string().min(4).max(10),
   deviceLabel: z.string().max(64).optional(),
 });
+
+// Twilio Verify allows ~5 attempts per code; we bound the surrounding
+// brute-force surface here too. Per-phone is the tight one.
+const IP_LIMIT = 10;
+const PHONE_LIMIT = 5;
+const WINDOW_MS = 10 * 60_000;
 
 /**
  * Verifies an OTP and, on success, creates a new MobileSession and returns:
@@ -26,6 +38,18 @@ const schema = z.object({
  * The refresh token is shown only once; only its hash is persisted.
  */
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const ipCheck = checkRateLimit({
+    bucket: "mobile-otp:verify:ip",
+    key: ip,
+    limit: IP_LIMIT,
+    windowMs: WINDOW_MS,
+  });
+  if (!ipCheck.ok) {
+    const init = rateLimitResponseInit(ipCheck);
+    return NextResponse.json(init.body, { status: 429, headers: init.headers });
+  }
+
   let raw: unknown;
   try {
     raw = await req.json();
@@ -41,6 +65,17 @@ export async function POST(req: Request) {
   if (!phone || !isAdminPhone(phone)) {
     // Same generic 401 whether non-admin or wrong code.
     return NextResponse.json({ error: "Invalid code." }, { status: 401 });
+  }
+
+  const phoneCheck = checkRateLimit({
+    bucket: "mobile-otp:verify:phone",
+    key: phone,
+    limit: PHONE_LIMIT,
+    windowMs: WINDOW_MS,
+  });
+  if (!phoneCheck.ok) {
+    const init = rateLimitResponseInit(phoneCheck);
+    return NextResponse.json(init.body, { status: 429, headers: init.headers });
   }
 
   const ok = await checkOtp(phone, parsed.data.code);
@@ -102,5 +137,5 @@ export async function POST(req: Request) {
     refreshToken,
     refreshTokenExpiresAt: session.expiresAt.toISOString(),
     user: { id: user.id, role: "ADMIN" as const },
-  });
+  } satisfies OtpVerifyResult);
 }

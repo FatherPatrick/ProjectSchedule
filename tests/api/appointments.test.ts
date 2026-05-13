@@ -1,0 +1,271 @@
+/**
+ * Integration tests for `POST /api/appointments` (public booking).
+ *
+ * Mocks the prisma client + side-effecting integrations (notifications)
+ * so we can exercise validation, rate-limiting, conflict detection, and
+ * the success envelope without touching Postgres / Resend / Twilio.
+ */
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+
+const prismaMock = vi.hoisted(() => ({
+  service: { findUnique: vi.fn() },
+  appointment: { findFirst: vi.fn(), create: vi.fn() },
+  client: { upsert: vi.fn() },
+}));
+
+vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/domain/clients", () => ({
+  findClientIdByEmail: vi.fn(async () => null),
+}));
+vi.mock("@/lib/integrations/notifications", () => ({
+  sendNotifications: vi.fn(async () => undefined),
+}));
+
+import { POST } from "@/app/api/appointments/route";
+import { _resetCaptchaDedupeForTests } from "@/lib/integrations/captcha";
+import { _resetRateLimitStoreForTests } from "@/lib/rateLimit";
+
+function postJson(body: unknown, headers?: Record<string, string>): Request {
+  return new Request("http://localhost/api/appointments", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-forwarded-for": "203.0.113.7",
+      ...headers,
+    },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+const FUTURE_ISO = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+const VALID_BODY = {
+  serviceId: "svc_1",
+  startISO: FUTURE_ISO,
+  name: "Pat Smith",
+  email: "pat@example.com",
+  phone: "+15555551212",
+  smsOptIn: true,
+};
+
+beforeEach(() => {
+  _resetRateLimitStoreForTests();
+  _resetCaptchaDedupeForTests();
+  delete process.env.TURNSTILE_SECRET_KEY;
+  prismaMock.service.findUnique.mockReset();
+  prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
+  prismaMock.appointment.create.mockReset();
+  prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_1" });
+});
+
+afterEach(() => {
+  _resetRateLimitStoreForTests();
+  _resetCaptchaDedupeForTests();
+  delete process.env.TURNSTILE_SECRET_KEY;
+  vi.unstubAllGlobals();
+});
+
+function mockServiceOk() {
+  prismaMock.service.findUnique.mockResolvedValue({
+    id: "svc_1",
+    name: "Manicure",
+    durationMinutes: 60,
+    active: true,
+  });
+}
+
+describe("POST /api/appointments — input validation", () => {
+  it("400s on a non-JSON body", async () => {
+    const res = await POST(postJson("not-json"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Invalid JSON." });
+  });
+
+  it("400s when required fields are missing", async () => {
+    const res = await POST(postJson({ serviceId: "svc_1" }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("Invalid input.");
+  });
+
+  it("400s on a malformed phone number", async () => {
+    mockServiceOk();
+    const res = await POST(postJson({ ...VALID_BODY, phone: "12345" }));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /api/appointments — domain rules", () => {
+  it("404s when the service is missing", async () => {
+    prismaMock.service.findUnique.mockResolvedValue(null);
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(404);
+  });
+
+  it("404s when the service is inactive", async () => {
+    prismaMock.service.findUnique.mockResolvedValue({
+      id: "svc_1",
+      name: "Manicure",
+      durationMinutes: 60,
+      active: false,
+    });
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(404);
+  });
+
+  it("400s when the requested start time is in the past", async () => {
+    mockServiceOk();
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const res = await POST(postJson({ ...VALID_BODY, startISO: past }));
+    expect(res.status).toBe(400);
+  });
+
+  it("409s when the slot is already taken", async () => {
+    mockServiceOk();
+    prismaMock.appointment.findFirst.mockResolvedValue({ id: "existing" });
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(409);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+  it("creates the appointment and returns the management envelope on the happy path", async () => {
+    mockServiceOk();
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt_1",
+      managementToken: "mgmt-token-xyz",
+    });
+
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      managementToken: string;
+      serviceName: string;
+      whenLabel: string;
+    };
+    expect(body.id).toBe("appt_1");
+    expect(body.managementToken).toBe("mgmt-token-xyz");
+    expect(body.serviceName).toBe("Manicure");
+    expect(body.whenLabel).toEqual(expect.any(String));
+
+    expect(prismaMock.appointment.create).toHaveBeenCalledOnce();
+    const createArgs = prismaMock.appointment.create.mock.calls[0][0] as {
+      data: { startsAt: Date; endsAt: Date; serviceId: string };
+    };
+    // endsAt should be exactly durationMinutes after startsAt.
+    expect(
+      createArgs.data.endsAt.getTime() - createArgs.data.startsAt.getTime()
+    ).toBe(60 * 60_000);
+    expect(createArgs.data.serviceId).toBe("svc_1");
+  });
+});
+
+describe("POST /api/appointments — rate limiting", () => {
+  it("429s after 5 requests from the same IP inside the window", async () => {
+    mockServiceOk();
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt",
+      managementToken: "tok",
+    });
+
+    // First 5 succeed (validation may still 409/200 etc.; we just care the
+    // limiter doesn't reject them).
+    for (let i = 0; i < 5; i++) {
+      const res = await POST(postJson(VALID_BODY));
+      expect(res.status).not.toBe(429);
+    }
+    // 6th from the same IP is throttled before any DB work happens.
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("does not throttle a different IP", async () => {
+    mockServiceOk();
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt",
+      managementToken: "tok",
+    });
+    for (let i = 0; i < 5; i++) {
+      await POST(postJson(VALID_BODY));
+    }
+    const res = await POST(
+      postJson(VALID_BODY, { "x-forwarded-for": "198.51.100.42" })
+    );
+    expect(res.status).not.toBe(429);
+  });
+});
+
+describe("POST /api/appointments \u2014 captcha gate", () => {
+  it("is a no-op when TURNSTILE_SECRET_KEY is unset", async () => {
+    mockServiceOk();
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt",
+      managementToken: "tok",
+    });
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects with 400 when the captcha token is missing and the secret is set", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "prod-secret";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    mockServiceOk();
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Missing captcha token." });
+    // Captcha rejection should short-circuit — no DB lookup, no service fetch.
+    expect(prismaMock.service.findUnique).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 400 when Cloudflare reports the token is invalid", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "prod-secret";
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: false,
+        "error-codes": ["invalid-input-response"],
+      }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    mockServiceOk();
+    const res = await POST(
+      postJson({ ...VALID_BODY, captchaToken: "forged" })
+    );
+    expect(res.status).toBe(400);
+    expect(prismaMock.service.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("proceeds with the booking when the captcha verifies", async () => {
+    process.env.TURNSTILE_SECRET_KEY = "prod-secret";
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    mockServiceOk();
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt",
+      managementToken: "tok",
+    });
+    const res = await POST(
+      postJson({ ...VALID_BODY, captchaToken: "good-token" })
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.appointment.create).toHaveBeenCalled();
+  });
+});
