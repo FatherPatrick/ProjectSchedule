@@ -48,7 +48,7 @@ export default async function ServicesAdmin() {
         action={createService}
         className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-2"
       >
-        <UnsavedChangesGuard formId="new-service-form" />
+        <UnsavedChangesGuard />
         <div className="grid sm:grid-cols-2 gap-2">
           <input
             name="name"

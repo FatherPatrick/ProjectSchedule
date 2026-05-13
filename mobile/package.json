@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "lint:fix": "expo lint -- --fix",
     "test": "vitest",
     "test:run": "vitest run",
     "typecheck": "tsc --noEmit"

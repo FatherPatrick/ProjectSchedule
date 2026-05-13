@@ -11,6 +11,7 @@ import {
   refreshTokenExpiry,
   signAccessToken,
 } from "@/lib/auth/mobileTokens";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import {
   checkRateLimit,
   getClientIp,
@@ -50,19 +51,15 @@ export async function POST(req: Request) {
     return NextResponse.json(init.body, { status: 429, headers: init.headers });
   }
 
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const parsed = schema.safeParse(raw);
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input." }, { status: 400 });
   }
 
   const phone = toE164(parsed.data.phone);
-  if (!phone || !isAdminPhone(phone)) {
+  if (!phone || !(await isAdminPhone(phone))) {
     // Same generic 401 whether non-admin or wrong code.
     return NextResponse.json({ error: "Invalid code." }, { status: 401 });
   }

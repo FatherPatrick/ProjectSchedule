@@ -29,17 +29,42 @@ export async function GET(req: Request) {
     select: { id: true },
   });
 
-  let sent = 0;
-  for (const a of due) {
+  // Fan out the notification dispatches in parallel rather than awaiting
+  // each in series — Twilio + Resend are network-bound and a serial loop
+  // makes a busy week's batch take O(N) round-trips.
+  const results = await Promise.allSettled(
+    due.map((a) => sendNotifications(a.id, "REMINDER_24H"))
+  );
+
+  const sentIds: string[] = [];
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      sentIds.push(due[i].id);
+    } else {
+      reportError(r.reason, {
+        where: "cron.reminders.send",
+        appointmentId: due[i].id,
+      });
+    }
+  });
+
+  // Single round-trip to mark everything we successfully delivered.
+  // A DB failure here means we'll re-send next tick (idempotent at the
+  // notification provider level — duplicates are preferable to silently
+  // missed reminders).
+  let sent = sentIds.length;
+  if (sentIds.length > 0) {
     try {
-      await sendNotifications(a.id, "REMINDER_24H");
-      await prisma.appointment.update({
-        where: { id: a.id },
+      await prisma.appointment.updateMany({
+        where: { id: { in: sentIds } },
         data: { reminderSentAt: new Date() },
       });
-      sent++;
     } catch (err) {
-      reportError(err, { where: "cron.reminders.send", appointmentId: a.id });
+      reportError(err, {
+        where: "cron.reminders.mark",
+        appointmentIds: sentIds,
+      });
+      sent = 0;
     }
   }
 

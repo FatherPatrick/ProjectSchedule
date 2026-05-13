@@ -8,6 +8,7 @@ import {
   Clock,
   LayoutDashboard,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const TABS = [
   { href: "/admin/services", label: "Services", icon: Sparkles },
   { href: "/admin/blackouts", label: "Blackouts", icon: CalendarOff },
   { href: "/admin/hours", label: "Hours", icon: Clock },
+  { href: "/admin/admins", label: "Admins", icon: Users },
 ];
 
 export default function AdminNav() {

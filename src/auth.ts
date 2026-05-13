@@ -23,7 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!phone || !code) return null;
 
         // Hard gate: only allow-listed admin phones may sign in.
-        if (!isAdminPhone(phone)) return null;
+        if (!(await isAdminPhone(phone))) return null;
 
         const ok = await checkOtp(phone, code);
         if (!ok) return null;

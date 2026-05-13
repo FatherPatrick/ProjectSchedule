@@ -156,7 +156,7 @@ export default async function HoursAdmin({
         action={saveHours}
         className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4"
       >
-        <UnsavedChangesGuard formId="hours-form" />
+        <UnsavedChangesGuard />
         <div className="space-y-3">
           {DOWS.map((label, d) => {
           const r = byDay.get(d);
@@ -297,7 +297,7 @@ export default async function HoursAdmin({
             action={addScheduledChange}
             className="mt-3 space-y-3"
           >
-            <UnsavedChangesGuard formId="scheduled-change-form" />
+            <UnsavedChangesGuard />
             <div className="flex flex-wrap items-center gap-3">
               <label className="text-sm flex items-center gap-2">
                 Effective from

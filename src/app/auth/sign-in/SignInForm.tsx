@@ -133,8 +133,9 @@ export function SignInForm({
             Dev mode
           </p>
           <p className="text-xs text-neutral-600">
-            Twilio is not called. Use your <code>ADMIN_PHONES</code> entry and
-            code <code className="font-mono">000000</code>.
+            Twilio is not called. Use any admin phone (env{" "}
+            <code>ADMIN_PHONES</code> or an entry in <code>AdminPhone</code>)
+            and code <code className="font-mono">000000</code>.
           </p>
         </div>
       )}

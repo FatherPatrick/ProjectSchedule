@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { settingsUpdateSchema } from "@/lib/validation/adminJson";
 import type { AppSettingsResponse } from "@/lib/api-types";
 
@@ -16,13 +17,9 @@ export async function PUT(req: Request) {
   if (!(await requireAdminEither(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const parsed = settingsUpdateSchema.safeParse(raw);
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const parsed = settingsUpdateSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input." },

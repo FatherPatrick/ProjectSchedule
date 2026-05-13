@@ -1,18 +1,94 @@
-/** Comma-separated list of admin phone numbers in E.164. */
+/**
+ * Admin allow-list + auth helpers.
+ *
+ * The allow-list now lives in the `AdminPhone` table (DB) so admins can
+ * be added / removed at runtime via the admin UI. The legacy
+ * `ADMIN_PHONES` env var is kept as a *bootstrap* fallback so:
+ *
+ *   - existing deployments keep working without a data backfill, and
+ *   - a fresh deploy with an empty `AdminPhone` table can still produce
+ *     its first admin (the env entry signs in, then can invite others
+ *     into the DB list, then the env can be cleared).
+ *
+ * `isAdminPhone` is async; it does one indexed PK lookup per call. The
+ * env fallback is consulted only when the DB lookup misses.
+ */
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { verifyAccessToken } from "@/lib/auth/mobileTokens";
 import { toE164 } from "@/lib/phone";
 
-export const ADMIN_PHONES: ReadonlySet<string> = new Set(
+/** Phones inherited from the `ADMIN_PHONES` env var, normalised to E.164. */
+export const ENV_ADMIN_PHONES: ReadonlySet<string> = new Set(
   (process.env.ADMIN_PHONES ?? "")
     .split(",")
     .map((s) => toE164(s.trim()))
     .filter((v): v is string => Boolean(v))
 );
 
-export function isAdminPhone(phoneE164: string): boolean {
-  return ADMIN_PHONES.has(phoneE164);
+export async function isAdminPhone(phoneE164: string): Promise<boolean> {
+  const row = await prisma.adminPhone.findUnique({
+    where: { phone: phoneE164 },
+    select: { phone: true },
+  });
+  if (row) return true;
+  return ENV_ADMIN_PHONES.has(phoneE164);
+}
+
+export interface AdminPhoneRow {
+  phone: string;
+  createdAt: Date;
+  createdById: string | null;
+  /** "db" = managed via the AdminPhone table; "env" = legacy bootstrap. */
+  source: "db" | "env";
+}
+
+/**
+ * Returns the union of DB-managed admin phones and any env-bootstrap
+ * phones not already shadowed by a DB row. DB rows always win when both
+ * exist — they carry the audit trail (`createdAt`, `createdById`).
+ */
+export async function listAdminPhones(): Promise<AdminPhoneRow[]> {
+  const dbRows = await prisma.adminPhone.findMany({
+    orderBy: { createdAt: "asc" },
+    select: { phone: true, createdAt: true, createdById: true },
+  });
+  const dbSet = new Set(dbRows.map((r) => r.phone));
+  const envRows: AdminPhoneRow[] = Array.from(ENV_ADMIN_PHONES)
+    .filter((p) => !dbSet.has(p))
+    .map((phone) => ({
+      phone,
+      // Sentinel — UI uses `source` to decide whether to show this date.
+      createdAt: new Date(0),
+      createdById: null,
+      source: "env",
+    }));
+  return [...dbRows.map((r) => ({ ...r, source: "db" as const })), ...envRows];
+}
+
+export async function addAdminPhone(
+  phoneE164: string,
+  addedById: string | null
+): Promise<void> {
+  // Idempotent: re-inviting an existing admin is a no-op rather than an
+  // error so the UI doesn't have to special-case the race.
+  await prisma.adminPhone.upsert({
+    where: { phone: phoneE164 },
+    create: { phone: phoneE164, createdById: addedById },
+    update: {},
+  });
+}
+
+/**
+ * Removes a phone from the DB allow-list. Returns `true` on success,
+ * `false` if no row was deleted (already absent). Env entries cannot be
+ * removed via this helper — they're tied to the deployment env.
+ */
+export async function removeAdminPhone(phoneE164: string): Promise<boolean> {
+  const result = await prisma.adminPhone.deleteMany({
+    where: { phone: phoneE164 },
+  });
+  return result.count > 0;
 }
 
 /**

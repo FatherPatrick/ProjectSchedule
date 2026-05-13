@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { findClientIdByEmail } from "@/lib/domain/clients";
 import { verifyTurnstileToken } from "@/lib/integrations/captcha";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { formatBiz } from "@/lib/timezone";
 import { pushToAdmins } from "@/lib/integrations/push";
 import { getClientIp } from "@/lib/rateLimit";
@@ -11,12 +12,9 @@ import { appointmentRequestSchema } from "@/lib/validation/appointments";
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const raw = body.data;
 
   const captchaToken =
     typeof raw === "object" && raw !== null && "captchaToken" in raw

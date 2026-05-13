@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { hashRefreshToken } from "@/lib/auth/mobileTokens";
+import { tryParseJsonBody } from "@/lib/http/parseJsonBody";
 
 const schema = z.object({ refreshToken: z.string().min(20).max(200) });
 
@@ -10,12 +11,8 @@ const schema = z.object({ refreshToken: z.string().min(20).max(200) });
  * `{ ok: true }` so clients can call this fire-and-forget on sign-out.
  */
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ ok: true });
-  }
+  const raw = await tryParseJsonBody(req);
+  if (raw === null) return NextResponse.json({ ok: true });
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ ok: true });
 

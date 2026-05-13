@@ -23,6 +23,7 @@
  *   - `ALLOWED_GRANULARITIES` (re-exported for the hours admin UI)
  */
 import { z } from "zod";
+import { hhmmToMinutes } from "@/lib/domain/dates";
 import {
   ALLOWED_GRANULARITIES,
   _shared,
@@ -102,11 +103,6 @@ const dayHoursFormSchema = z.object({
   open: z.string().regex(HHMM_REGEX, "Open time must be HH:MM."),
   close: z.string().regex(HHMM_REGEX, "Close time must be HH:MM."),
 });
-
-function hhmmToMinutes(hhmm: string): number {
-  const [h, m] = hhmm.split(":").map((p) => Number.parseInt(p, 10));
-  return h * 60 + m;
-}
 
 /** Map position-indexed form days into the canonical JSON shape. */
 function formDaysToJson(

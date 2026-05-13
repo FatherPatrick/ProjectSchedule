@@ -16,6 +16,7 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
-    "../src/lib/api-types.ts"
+    "../src/lib/api-types.ts",
+    "../src/lib/domain/dates.ts"
   ]
 }

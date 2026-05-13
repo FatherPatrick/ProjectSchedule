@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAdminEither } from "@/lib/auth/admin";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { businessHoursJsonSaveSchema } from "@/lib/validation/adminJson";
 import type { HoursResponse } from "@/lib/api-types";
 
@@ -36,13 +37,9 @@ export async function PUT(req: Request) {
   if (!(await requireAdminEither(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const parsed = businessHoursJsonSaveSchema.safeParse(raw);
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const parsed = businessHoursJsonSaveSchema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input." },

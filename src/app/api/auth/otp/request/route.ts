@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { toE164 } from "@/lib/phone";
 import { isAdminPhone } from "@/lib/auth/admin";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { sendOtp } from "@/lib/integrations/verify";
 import { reportError } from "@/lib/observability/reportError";
 import {
@@ -30,13 +31,9 @@ export async function POST(req: Request) {
     return NextResponse.json(init.body, { status: 429, headers: init.headers });
   }
 
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const parsed = schema.safeParse(raw);
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input." }, { status: 400 });
   }
@@ -61,7 +58,7 @@ export async function POST(req: Request) {
 
   // Don't reveal whether a phone is admin or not — always pretend success.
   // Only actually send if it's an allow-listed admin phone.
-  if (isAdminPhone(e164)) {
+  if (await isAdminPhone(e164)) {
     try {
       await sendOtp(e164);
     } catch (err) {

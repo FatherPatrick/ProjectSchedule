@@ -8,6 +8,7 @@ import {
   refreshTokenExpiry,
   signAccessToken,
 } from "@/lib/auth/mobileTokens";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import type { RefreshResult } from "@/lib/api-types";
 
 const schema = z.object({ refreshToken: z.string().min(20).max(200) });
@@ -18,13 +19,9 @@ const schema = z.object({ refreshToken: z.string().min(20).max(200) });
  * revoked token being presented again) revokes the entire session.
  */
 export async function POST(req: Request) {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-  const parsed = schema.safeParse(raw);
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const parsed = schema.safeParse(body.data);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input." }, { status: 400 });
   }

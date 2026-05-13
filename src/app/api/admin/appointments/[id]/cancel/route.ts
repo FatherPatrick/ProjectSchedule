@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminEither } from "@/lib/auth/admin";
 import { cancelAppointment } from "@/lib/domain/appointments";
+import { tryParseJsonBody } from "@/lib/http/parseJsonBody";
 import { appointmentCancelBodySchema } from "@/lib/validation/admin";
 
 export async function POST(
@@ -15,7 +16,7 @@ export async function POST(
   // Body is optional. If present, parse with Zod so we get consistent
   // trimming + length-limit handling instead of ad-hoc casting.
   let note: string | undefined;
-  const raw = await req.json().catch(() => null);
+  const raw = await tryParseJsonBody(req);
   if (raw !== null) {
     const parsed = appointmentCancelBodySchema.safeParse(raw);
     if (!parsed.success) {

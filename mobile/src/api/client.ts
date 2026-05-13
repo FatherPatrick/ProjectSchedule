@@ -28,6 +28,39 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Unauthenticated POST helper for the mobile client.
+ *
+ * Used by the pre-auth endpoints in `./auth.ts` (OTP request / verify,
+ * refresh, logout) — they cannot use {@link useApi} because there is no
+ * access token yet (or, in the case of refresh, the access token is
+ * stale by definition). Centralised here so the base URL, JSON
+ * serialisation, error formatting, and `ApiError` semantics stay the
+ * same as the authenticated path.
+ */
+export async function postJsonUnauthed<T>(
+  path: string,
+  body: unknown
+): Promise<T> {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data?.error) message = data.error;
+    } catch {
+      // Body was missing / not JSON; keep the generic message above.
+    }
+    throw new ApiError(res.status, message);
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
 type FetchInit = Omit<RequestInit, "body"> & { body?: unknown };
 
 async function doFetch(

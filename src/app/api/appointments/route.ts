@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { findClientIdByEmail } from "@/lib/domain/clients";
 import { verifyTurnstileToken } from "@/lib/integrations/captcha";
+import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { sendNotifications } from "@/lib/integrations/notifications";
 import { reportError } from "@/lib/observability/reportError";
 import {
@@ -31,12 +32,9 @@ export async function POST(req: Request) {
     return NextResponse.json(init.body, { status: 429, headers: init.headers });
   }
 
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
+  const body = await parseJsonBody(req);
+  if (!body.ok) return body.response;
+  const raw = body.data;
 
   // Captcha is verified BEFORE the Zod parse so a bad token can't be
   // hidden behind unrelated validation noise. No-op when

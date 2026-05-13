@@ -3,26 +3,38 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UnsavedChangesGuardProps {
-  /** id of the <form> to monitor for changes. */
-  formId: string;
   /** Optional message shown in the modal. */
   message?: string;
 }
 
 /**
- * Watches a target form for any value changes and:
+ * Watches its enclosing `<form>` for any value changes and:
  *  - Asks the browser to confirm a refresh / tab-close (beforeunload).
- *  - Intercepts clicks on in-app <a href> links and shows a pretty
+ *  - Intercepts clicks on in-app `<a href>` links and shows a pretty
  *    "are you sure?" modal before allowing the navigation.
+ *
+ * Usage:
+ *
+ *   <form action={save}>
+ *     <UnsavedChangesGuard />
+ *     ...inputs...
+ *   </form>
+ *
+ * The guard locates its parent form by walking up the DOM from a tiny
+ * sentinel `<span>` it renders. This removes the by-`formId` coupling
+ * the previous version had — there's no more `document.getElementById`
+ * call, and the page no longer has to coordinate a unique ID between
+ * the form and the guard. Render multiple guards in different forms on
+ * the same page freely; each one only watches its own ancestor form.
  *
  * The form is considered "clean" again as soon as it is submitted.
  */
 export function UnsavedChangesGuard({
-  formId,
   message = "You have unsaved changes. If you leave now, those changes will be lost.",
 }: UnsavedChangesGuardProps) {
   const [dirty, setDirty] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLSpanElement | null>(null);
   const initialSnapshot = useRef<string>("");
 
   const snapshotForm = useCallback((form: HTMLFormElement) => {
@@ -33,16 +45,22 @@ export function UnsavedChangesGuard({
     return JSON.stringify(entries);
   }, []);
 
-  // Establish the initial snapshot once the form is in the DOM.
+  // Establish the initial snapshot once the sentinel is in the DOM.
   useEffect(() => {
-    const form = document.getElementById(formId) as HTMLFormElement | null;
-    if (!form) return;
+    const form = sentinelRef.current?.closest("form");
+    if (!form) {
+      // Nothing to guard. The component was rendered outside a <form>;
+      // log once so it's diagnosable but otherwise no-op.
+      console.warn(
+        "[UnsavedChangesGuard] No ancestor <form> found — guard is inert."
+      );
+      return;
+    }
     initialSnapshot.current = snapshotForm(form);
 
     function recompute() {
-      const f = document.getElementById(formId) as HTMLFormElement | null;
-      if (!f) return;
-      const now = snapshotForm(f);
+      if (!form) return;
+      const now = snapshotForm(form);
       setDirty((prev) => {
         const next = now !== initialSnapshot.current;
         return prev === next ? prev : next;
@@ -55,8 +73,7 @@ export function UnsavedChangesGuard({
       // Update the baseline so a soft revalidation that re-renders the page
       // doesn't immediately re-flag dirty.
       requestAnimationFrame(() => {
-        const f = document.getElementById(formId) as HTMLFormElement | null;
-        if (f) initialSnapshot.current = snapshotForm(f);
+        if (form) initialSnapshot.current = snapshotForm(form);
       });
     }
 
@@ -87,7 +104,7 @@ export function UnsavedChangesGuard({
       observer.disconnect();
       window.clearInterval(intervalId);
     };
-  }, [formId, snapshotForm]);
+  }, [snapshotForm]);
 
   // Browser-level guard for refresh / tab close / external nav.
   useEffect(() => {
@@ -147,43 +164,52 @@ export function UnsavedChangesGuard({
     setPendingHref(null);
   }
 
-  if (!pendingHref) return null;
+  // Sentinel marker so we can locate the enclosing <form> via ref.
+  // It renders nothing visible and has no layout impact.
+  const sentinel = (
+    <span ref={sentinelRef} aria-hidden="true" style={{ display: "none" }} />
+  );
+
+  if (!pendingHref) return sentinel;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="unsaved-title"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) cancelLeave();
-      }}
-    >
-      <div className="w-full max-w-md rounded-2xl border border-pink-200 bg-white p-5 shadow-2xl">
-        <h2
-          id="unsaved-title"
-          className="text-lg font-semibold text-neutral-900"
-        >
-          Leave without saving?
-        </h2>
-        <p className="mt-2 text-sm text-neutral-600">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={cancelLeave}
-            className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+    <>
+      {sentinel}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="unsaved-title"
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) cancelLeave();
+        }}
+      >
+        <div className="w-full max-w-md rounded-2xl border border-pink-200 bg-white p-5 shadow-2xl">
+          <h2
+            id="unsaved-title"
+            className="text-lg font-semibold text-neutral-900"
           >
-            Stay on page
-          </button>
-          <button
-            type="button"
-            onClick={confirmLeave}
-            className="rounded-full bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-rose-600 hover:to-pink-700"
-          >
-            Discard changes
-          </button>
+            Leave without saving?
+          </h2>
+          <p className="mt-2 text-sm text-neutral-600">{message}</p>
+          <div className="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={cancelLeave}
+              className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            >
+              Stay on page
+            </button>
+            <button
+              type="button"
+              onClick={confirmLeave}
+              className="rounded-full bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-rose-600 hover:to-pink-700"
+            >
+              Discard changes
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
