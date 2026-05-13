@@ -143,7 +143,7 @@ export default async function AdminsPage({
           </button>
         </div>
         <p className="text-xs text-neutral-500">
-          They'll be able to sign in via SMS code the next time they
+          They&apos;ll be able to sign in via SMS code the next time they
           request one. No notification is sent.
         </p>
       </form>

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { validateEnvObject } from "@/lib/env";
 
 const PROD_BASE: NodeJS.ProcessEnv = {
