@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   CalendarOff,
+  CalendarPlus,
   Clock,
   LayoutDashboard,
   Sparkles,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/admin/book", label: "New booking", icon: CalendarPlus },
   { href: "/admin/services", label: "Services", icon: Sparkles },
   { href: "/admin/blackouts", label: "Blackouts", icon: CalendarOff },
   { href: "/admin/hours", label: "Hours", icon: Clock },

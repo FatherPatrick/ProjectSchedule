@@ -139,6 +139,10 @@ Open <http://localhost:3000>.
 
 ### Long-term / product
 
+- Adding policies page that is like Terms
+- Update confirmation and reminder text
+  - Make reminder text 2 hrs before appt
+- Fix mobile styling, mainly for admin pages
 - Styling changes and styling customization for admins
 - Investigate personal email domains
 - Investigate email confirmation/reminders

@@ -29,6 +29,35 @@ export const appointmentRequestSchema = z.object({
 
 export type AppointmentRequest = z.infer<typeof appointmentRequestSchema>;
 
+/**
+ * Admin "book on behalf of a client" request. Unlike the public schema this
+ * allows either an existing `clientId` OR new-client details, and the route
+ * creates a CONFIRMED appointment directly (no approval, no lead-time / window
+ * / business-hours checks — admins can book any future slot). Phone for a new
+ * client is normalized to E.164 in the route.
+ */
+export const adminAppointmentCreateSchema = z
+  .object({
+    serviceId: z.string().min(1),
+    startISO: z.string().datetime(),
+    clientId: z.string().min(1).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    // Optional — admin bookings only require a name + phone; email may be added
+    // later. When provided it must still be a valid address.
+    email: z.string().trim().email().optional(),
+    phone: z.string().trim().min(7).max(32).optional(),
+    smsOptIn: z.boolean().default(true),
+    /** When true (default), send the client the usual confirmation + reminder. */
+    notify: z.boolean().default(true),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => Boolean(v.clientId) || Boolean(v.name && v.phone), {
+    message:
+      "Select an existing client, or enter a name and phone for a new client.",
+  });
+
+export type AdminAppointmentCreate = z.infer<typeof adminAppointmentCreateSchema>;
+
 /** Query for the public availability endpoint. */
 export const availabilityQuerySchema = z.object({
   serviceId: z.string().min(1),

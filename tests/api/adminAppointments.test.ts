@@ -9,10 +9,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminEitherMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
-  appointment: { findMany: vi.fn() },
+  appointment: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  service: { findUnique: vi.fn() },
+  client: { findUnique: vi.fn(), upsert: vi.fn() },
 }));
 const approveMock = vi.hoisted(() => vi.fn());
 const cancelMock = vi.hoisted(() => vi.fn());
+const findClientIdByEmailMock = vi.hoisted(() => vi.fn());
+const sendNotificationsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdminEither: requireAdminEitherMock,
@@ -22,17 +26,50 @@ vi.mock("@/lib/domain/appointments", () => ({
   approveAppointment: approveMock,
   cancelAppointment: cancelMock,
 }));
+vi.mock("@/lib/domain/clients", () => ({
+  findClientIdByEmail: findClientIdByEmailMock,
+}));
+vi.mock("@/lib/integrations/notifications", () => ({
+  sendNotifications: sendNotificationsMock,
+}));
 
-import { GET } from "@/app/api/admin/appointments/route";
+import { GET, POST } from "@/app/api/admin/appointments/route";
 import { POST as approveRoute } from "@/app/api/admin/appointments/[id]/approve/route";
 import { POST as cancelRoute } from "@/app/api/admin/appointments/[id]/cancel/route";
 
 beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
   prismaMock.appointment.findMany.mockReset().mockResolvedValue([]);
+  prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
+  prismaMock.appointment.create.mockReset().mockResolvedValue({
+    id: "appt_new",
+    managementToken: "tok_123",
+  });
+  prismaMock.service.findUnique.mockReset().mockResolvedValue({
+    id: "svc_1",
+    name: "Manicure",
+    durationMinutes: 60,
+    active: true,
+  });
+  prismaMock.client.findUnique.mockReset().mockResolvedValue({ id: "client_1" });
+  prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_new" });
   approveMock.mockReset();
   cancelMock.mockReset();
+  findClientIdByEmailMock.mockReset().mockResolvedValue(null);
+  sendNotificationsMock.mockReset().mockResolvedValue(undefined);
 });
+
+const ADMIN_FUTURE_ISO = new Date(
+  Date.now() + 3 * 24 * 60 * 60 * 1000
+).toISOString();
+
+function createReq(body: unknown): Request {
+  return new Request("http://localhost/api/admin/appointments", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
 
 function listReq(qs = ""): Request {
   return new Request(`http://localhost/api/admin/appointments${qs ? `?${qs}` : ""}`);
@@ -185,5 +222,104 @@ describe("POST /api/admin/appointments/[id]/cancel", () => {
     const res = await call("missing", { message: "x" });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not found" });
+  });
+});
+
+
+describe("POST /api/admin/appointments — admin books for a client", () => {
+  const EXISTING_BODY = {
+    serviceId: "svc_1",
+    startISO: ADMIN_FUTURE_ISO,
+    clientId: "client_1",
+  };
+
+  it("401s when the caller is not an admin", async () => {
+    requireAdminEitherMock.mockResolvedValue(false);
+    const res = await POST(createReq(EXISTING_BODY));
+    expect(res.status).toBe(401);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+  it("400s when neither a clientId nor new-client details are given", async () => {
+    const res = await POST(
+      createReq({ serviceId: "svc_1", startISO: ADMIN_FUTURE_ISO })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("404s when the service is missing", async () => {
+    prismaMock.service.findUnique.mockResolvedValue(null);
+    const res = await POST(createReq(EXISTING_BODY));
+    expect(res.status).toBe(404);
+  });
+
+  it("400s when the start time is in the past", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const res = await POST(createReq({ ...EXISTING_BODY, startISO: past }));
+    expect(res.status).toBe(400);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+  it("409s when the slot overlaps a confirmed appointment", async () => {
+    prismaMock.appointment.findFirst.mockResolvedValue({ id: "other" });
+    const res = await POST(createReq(EXISTING_BODY));
+    expect(res.status).toBe(409);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+  it("creates a CONFIRMED appointment for an existing client and notifies", async () => {
+    const res = await POST(createReq(EXISTING_BODY));
+    expect(res.status).toBe(200);
+    expect(prismaMock.appointment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "CONFIRMED", clientId: "client_1" }),
+      })
+    );
+    expect(sendNotificationsMock).toHaveBeenCalledWith("appt_new", "CONFIRMATION");
+  });
+
+  it("does not notify when notify:false", async () => {
+    const res = await POST(createReq({ ...EXISTING_BODY, notify: false }));
+    expect(res.status).toBe(200);
+    expect(sendNotificationsMock).not.toHaveBeenCalled();
+  });
+
+  it("upserts a new client by email when details are provided", async () => {
+    const res = await POST(
+      createReq({
+        serviceId: "svc_1",
+        startISO: ADMIN_FUTURE_ISO,
+        name: "New Person",
+        email: "New@Example.com",
+        phone: "+15555551212",
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.client.upsert).toHaveBeenCalled();
+    expect(prismaMock.appointment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ clientId: "client_new" }),
+      })
+    );
+  });
+
+  it("creates a new client with name + phone only (email optional)", async () => {
+    const res = await POST(
+      createReq({
+        serviceId: "svc_1",
+        startISO: ADMIN_FUTURE_ISO,
+        name: "No Email",
+        phone: "+15555551212",
+      })
+    );
+    expect(res.status).toBe(200);
+    // No email → no email-dedupe lookup, and the client is stored with a
+    // blank email + emailOptIn disabled.
+    expect(findClientIdByEmailMock).not.toHaveBeenCalled();
+    expect(prismaMock.client.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ email: "", emailOptIn: false }),
+      })
+    );
   });
 });

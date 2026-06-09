@@ -96,6 +96,45 @@ export type ServiceCreateInput = {
 export type ServiceUpdateInput = Partial<ServiceCreateInput>;
 
 // ---------------------------------------------------------------------------
+// Admin client search (GET /api/admin/clients) + admin booking
+// ---------------------------------------------------------------------------
+
+export type ClientLiteDTO = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+};
+
+export type ClientSearchResponse = DataResponse<ClientLiteDTO[]>;
+
+/**
+ * Body for `POST /api/admin/appointments` (admin books for a client). Provide
+ * either `clientId` (existing) or `name`/`email`/`phone` (new client).
+ */
+export type AdminAppointmentCreateInput = {
+  serviceId: string;
+  /** ISO timestamp (UTC). */
+  startISO: string;
+  clientId?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  smsOptIn?: boolean;
+  /** Send the client the confirmation + reminder. Defaults to true. */
+  notify?: boolean;
+  notes?: string;
+};
+
+/** Success envelope returned by the admin + public booking endpoints. */
+export type BookingCreatedResponse = {
+  id: string;
+  managementToken: string;
+  serviceName: string;
+  whenLabel: string;
+};
+
+// ---------------------------------------------------------------------------
 // Blackouts
 // ---------------------------------------------------------------------------
 
