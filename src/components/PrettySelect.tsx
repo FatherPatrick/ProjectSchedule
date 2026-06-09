@@ -82,8 +82,11 @@ export function PrettySelect<V extends string | number>({
       if (!isControlled) setInternal(next);
       onChange?.(next);
       setOpen(false);
-      // Return focus to the trigger so keyboard flow stays sane.
-      requestAnimationFrame(() => triggerRef.current?.focus());
+      // Return focus to the trigger so keyboard flow stays sane. preventScroll
+      // stops the browser from jumping the page to the (already-visible) trigger.
+      requestAnimationFrame(() =>
+        triggerRef.current?.focus({ preventScroll: true })
+      );
     },
     [isControlled, onChange]
   );
@@ -150,7 +153,10 @@ export function PrettySelect<V extends string | number>({
     }
   }, [open, selectedIndex]);
 
-  // Scroll active item into view inside the menu.
+  // Keep the active item visible *within the menu* by adjusting the list's own
+  // scrollTop. We deliberately avoid element.scrollIntoView(), which also
+  // scrolls every scrollable ancestor (including <body>) and was causing the
+  // whole page to jump when a dropdown opened.
   useEffect(() => {
     if (!open) return;
     const list = listRef.current;
@@ -158,7 +164,14 @@ export function PrettySelect<V extends string | number>({
     const item = list.querySelectorAll<HTMLElement>("[role='option']")[
       activeIndex
     ];
-    item?.scrollIntoView({ block: "nearest" });
+    if (!item) return;
+    const itemTop = item.offsetTop;
+    const itemBottom = itemTop + item.offsetHeight;
+    if (itemTop < list.scrollTop) {
+      list.scrollTop = itemTop;
+    } else if (itemBottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = itemBottom - list.clientHeight;
+    }
   }, [open, activeIndex]);
 
   function onTriggerKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
@@ -196,9 +209,10 @@ export function PrettySelect<V extends string | number>({
     }
   }
 
-  // When the listbox opens, move focus into it for keyboard nav.
+  // When the listbox opens, move focus into it for keyboard nav. preventScroll
+  // stops the browser from scrolling the page toward the portaled menu.
   useEffect(() => {
-    if (open) listRef.current?.focus();
+    if (open) listRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   // Hidden input that carries the value into <form>. We dispatch a real

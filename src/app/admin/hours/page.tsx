@@ -30,10 +30,25 @@ const GRANULARITY_OPTIONS = ALLOWED_GRANULARITIES.map((value) => ({
           : `Every ${(value / 60).toFixed(1)} hours`,
 }));
 
+// "Max book-out" options. Values are strings ("none" = no limit) so the
+// PrettySelect hidden input posts cleanly into the server action; the form
+// validator maps "none" → null and the rest to a day count.
+const MAX_ADVANCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "7", label: "1 week" },
+  { value: "14", label: "2 weeks" },
+  { value: "21", label: "3 weeks" },
+  { value: "30", label: "1 month" },
+  { value: "90", label: "3 months" },
+  { value: "180", label: "6 months" },
+  { value: "365", label: "1 year" },
+  { value: "none", label: "No limit" },
+];
+
 async function saveHours(formData: FormData) {
   "use server";
   await assertAdmin();
-  const { granularity, days } = parseBusinessHoursSaveForm(formData);
+  const { granularity, maxAdvanceDays, days } =
+    parseBusinessHoursSaveForm(formData);
   await prisma.$transaction([
     ...days.map((day, d) =>
       prisma.businessHours.upsert({
@@ -52,7 +67,7 @@ async function saveHours(formData: FormData) {
       })
     ),
   ]);
-  await updateSettings({ slotGranularityMin: granularity });
+  await updateSettings({ slotGranularityMin: granularity, maxAdvanceDays });
   revalidatePath("/admin/hours");
   redirect("/admin/hours?saved=hours");
 }
@@ -152,7 +167,7 @@ export default async function HoursAdmin({
       </h1>
       <form
         id="hours-form"
-        key={`hours-${settings.slotGranularityMin}`}
+        key={`hours-${settings.slotGranularityMin}-${settings.maxAdvanceDays ?? "none"}`}
         action={saveHours}
         className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4"
       >
@@ -206,6 +221,26 @@ export default async function HoursAdmin({
             defaultValue={settings.slotGranularityMin}
             triggerClassName="min-w-[14rem]"
             options={GRANULARITY_OPTIONS}
+          />
+        </div>
+
+        <div className="border-t border-neutral-200 pt-3">
+          <label className="text-sm font-medium">Max book-out time</label>
+          <p className="text-xs text-neutral-500 mb-2">
+            How far in advance clients can book. Stops bookings way out in the
+            future (e.g. two years from now).
+          </p>
+          <PrettySelect
+            key={settings.maxAdvanceDays ?? "none"}
+            name="maxAdvanceDays"
+            ariaLabel="Max book-out time"
+            defaultValue={
+              settings.maxAdvanceDays == null
+                ? "none"
+                : String(settings.maxAdvanceDays)
+            }
+            triggerClassName="min-w-[14rem]"
+            options={MAX_ADVANCE_OPTIONS}
           />
         </div>
 

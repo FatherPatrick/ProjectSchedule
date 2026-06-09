@@ -10,9 +10,19 @@ const isProd = process.env.NODE_ENV === "production";
  */
 export const DEV_BYPASS_CODE = "000000";
 
-/** Send a one-time code via SMS. Throws on transport errors. */
-export async function sendOtp(phoneE164: string): Promise<{ skipped: boolean }> {
-  if (!isProd) {
+/**
+ * Send a one-time code via SMS. Throws on transport errors.
+ *
+ * In dev the real Twilio Verify call is skipped (use {@link DEV_BYPASS_CODE})
+ * unless `opts.forceReal` is set — the sign-in form's "send a real text" dev
+ * toggle uses this to exercise the actual Verify path against a real handset.
+ * The bypass code still works in dev regardless.
+ */
+export async function sendOtp(
+  phoneE164: string,
+  opts?: { forceReal?: boolean }
+): Promise<{ skipped: boolean }> {
+  if (!isProd && !opts?.forceReal) {
     console.log(
       `[verify:dev] Pretending to send OTP to ${phoneE164}. Use code ${DEV_BYPASS_CODE}.`
     );

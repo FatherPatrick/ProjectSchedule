@@ -153,6 +153,9 @@ model Setting {
   id                 String  @id
   slotGranularityMin Int
   allowStartAtClose  Boolean @default(false)
+  /// How far in advance clients may book, in days. NULL means no limit.
+  /// Enforced on the public booking + propose paths and the availability API.
+  maxAdvanceDays     Int?
 }
 
 /// DB-managed admin allow-list. A phone is considered an admin if it

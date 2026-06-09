@@ -103,6 +103,11 @@ export async function getAvailableSlots(opts: {
 
   const busy = [...appts, ...blackouts];
   const now = new Date();
+  // Latest start permitted by the "max book-out" setting (null = no limit).
+  const maxStart =
+    settings.maxAdvanceDays == null
+      ? null
+      : new Date(now.getTime() + settings.maxAdvanceDays * 86_400_000);
   const slots: Slot[] = [];
 
   // Last possible start so the appointment ends by closeMin.
@@ -117,6 +122,7 @@ export async function getAvailableSlots(opts: {
     const end = new Date(start.getTime() + service.durationMinutes * 60_000);
 
     if (start <= now) continue; // no past slots
+    if (maxStart && start > maxStart) continue; // beyond the book-out window
 
     const overlaps = busy.some((b) => b.startsAt < end && b.endsAt > start);
     if (overlaps) continue;

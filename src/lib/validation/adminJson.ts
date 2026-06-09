@@ -22,6 +22,12 @@ export const ALLOWED_GRANULARITIES = [
   5, 10, 15, 20, 30, 45, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360,
 ] as const;
 
+/**
+ * Valid "max book-out" windows in days: 1 week, 2 weeks, 1 month, 3 months,
+ * 6 months, 1 year. `null` (handled separately) means no limit.
+ */
+export const ALLOWED_MAX_ADVANCE_DAYS = [7, 14, 21, 30, 90, 180, 365] as const;
+
 const NAME_MAX = 120;
 const DESCRIPTION_MAX = 2_000;
 const NOTE_MAX = 200;
@@ -70,6 +76,15 @@ const granularityField = z.coerce.number().int().refine(
   (v) => (ALLOWED_GRANULARITIES as readonly number[]).includes(v),
   { message: "Unsupported booking interval." }
 );
+
+/** Days-in-advance window, or `null` for no limit. */
+const maxAdvanceDaysField = z
+  .number()
+  .int()
+  .refine((v) => (ALLOWED_MAX_ADVANCE_DAYS as readonly number[]).includes(v), {
+    message: "Unsupported maximum booking window.",
+  })
+  .nullable();
 
 const effectiveFromField = z
   .string()
@@ -156,6 +171,7 @@ export const settingsUpdateSchema = z
       )
       .optional(),
     allowStartAtClose: z.boolean().optional(),
+    maxAdvanceDays: maxAdvanceDaysField.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "Provide at least one field to update.",
@@ -184,6 +200,7 @@ export type PushRegister = z.infer<typeof pushRegisterSchema>;
  */
 export const _shared = {
   granularityField,
+  maxAdvanceDaysField,
   effectiveFromField,
   noteField,
   HHMM_REGEX,

@@ -1,15 +1,17 @@
 import { prisma } from "@/lib/db/prisma";
+import { getSettings } from "@/lib/domain/settings";
 import { BookingForm } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function BookPage() {
-  const [services, hours] = await Promise.all([
+  const [services, hours, settings] = await Promise.all([
     prisma.service.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.businessHours.findMany(),
+    getSettings(),
   ]);
 
   const openDays = new Set(
@@ -38,6 +40,7 @@ export default async function BookPage() {
       ) : (
         <BookingForm
           closedDayOfWeek={closedDayOfWeek}
+          maxAdvanceDays={settings.maxAdvanceDays}
           services={services.map((s) => ({
             id: s.id,
             name: s.name,

@@ -153,6 +153,8 @@ export type HoursScheduleResponse = DataResponse<HoursOverride[]>;
 export type AppSettingsDTO = {
   slotGranularityMin: number;
   allowStartAtClose: boolean;
+  /** How far ahead clients may book, in days. `null` means no limit. */
+  maxAdvanceDays: number | null;
 };
 
 export type AppSettingsResponse = DataResponse<AppSettingsDTO>;

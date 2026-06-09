@@ -15,6 +15,9 @@ export function SignInForm({
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Dev-only: when on, ask the server to send a real Twilio Verify text
+  // instead of the 000000 bypass. Ignored by the API in production.
+  const [devRealSend, setDevRealSend] = useState(false);
 
   async function requestCode(e: React.FormEvent) {
     e.preventDefault();
@@ -24,7 +27,10 @@ export function SignInForm({
       const res = await fetch("/api/auth/otp/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({
+          phone,
+          ...(devHint && devRealSend ? { devRealSend: true } : {}),
+        }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -81,6 +87,17 @@ export function SignInForm({
           >
             {busy ? "Sending…" : "Text me a code"}
           </button>
+          {devHint && (
+            <label className="flex items-center gap-2 pt-1 text-xs text-amber-700">
+              <input
+                type="checkbox"
+                checked={devRealSend}
+                onChange={(e) => setDevRealSend(e.target.checked)}
+                className="h-3.5 w-3.5"
+              />
+              Send a real text via Twilio (dev)
+            </label>
+          )}
         </form>
       ) : (
         <form onSubmit={verifyCode} className="space-y-2">
@@ -133,9 +150,12 @@ export function SignInForm({
             Dev mode
           </p>
           <p className="text-xs text-neutral-600">
-            Twilio is not called. Use any admin phone (env{" "}
+            By default Twilio is not called — use any admin phone (env{" "}
             <code>ADMIN_PHONES</code> or an entry in <code>AdminPhone</code>)
-            and code <code className="font-mono">000000</code>.
+            and code <code className="font-mono">000000</code>. Tick{" "}
+            <em>Send a real text via Twilio</em> above to receive an actual OTP
+            at an admin number (the <code className="font-mono">000000</code>{" "}
+            bypass still works too).
           </p>
         </div>
       )}

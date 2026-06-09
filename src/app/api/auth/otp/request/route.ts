@@ -11,7 +11,12 @@ import {
   rateLimitResponseInit,
 } from "@/lib/rateLimit";
 
-const schema = z.object({ phone: z.string().min(7).max(32) });
+const schema = z.object({
+  phone: z.string().min(7).max(32),
+  // Dev-only: opt into a real Twilio Verify send instead of the bypass code.
+  // Honored only when NODE_ENV !== "production" (see below).
+  devRealSend: z.boolean().optional(),
+});
 
 // Twilio Verify costs real money per send. Keep this strict.
 const IP_LIMIT = 5;
@@ -59,8 +64,12 @@ export async function POST(req: Request) {
   // Don't reveal whether a phone is admin or not — always pretend success.
   // Only actually send if it's an allow-listed admin phone.
   if (await isAdminPhone(e164)) {
+    // Never let a client force real (paid) sends in production — the toggle is
+    // a dev convenience only. In prod, sends are always real anyway.
+    const forceReal =
+      process.env.NODE_ENV !== "production" && parsed.data.devRealSend === true;
     try {
-      await sendOtp(e164);
+      await sendOtp(e164, { forceReal });
     } catch (err) {
       reportError(err, { where: "otp.request.send", phone: e164 });
       return NextResponse.json(

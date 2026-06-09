@@ -136,22 +136,9 @@ Open <http://localhost:3000>.
   unique `(serviceId, startsAt)` in the appointment table, the
   `Settings` singleton row). Slower suite, gated by Docker
   availability — revisit if regressions slip past the mocked tests.
-- ✅ **Multi-admin.** Admins are now stored in an `AdminPhone` table
-  (PK = E.164 phone, audit columns `createdAt` + `createdById`).
-  `isAdminPhone` is async and DB-backed with `ADMIN_PHONES` kept as a
-  bootstrap fallback so existing deployments and fresh installs both
-  keep working. New `/api/admin/admins` GET/POST + `/[phone]` DELETE
-  routes power a new **/admin/admins** UI for invite/revoke; guardrails
-  refuse self-removal and env-managed entries. Sign-in and "no access"
-  copy updated to point at the DB-managed list. *(Full multi-tenant —
-  per-`Studio` row scoping — is still tracked under the long-term TODO
-  below; this change unblocks per-studio admin lists without yet
-  scoping the rest of the schema.)*
 
 ### Long-term / product
 
-- Only text confirmation/reminders for now ?
-  - finish setting this up
 - Styling changes and styling customization for admins
 - Investigate personal email domains
 - Investigate email confirmation/reminders

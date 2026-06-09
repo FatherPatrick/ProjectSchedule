@@ -13,6 +13,11 @@ import {
 } from "@/lib/rateLimit";
 import { formatBiz } from "@/lib/timezone";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
+import {
+  getSettings,
+  isBeyondBookingWindow,
+  BEYOND_WINDOW_MESSAGE,
+} from "@/lib/domain/settings";
 
 // First-pass anti-abuse for the public booking endpoint. A captcha
 // (Turnstile / hCaptcha) is the long-term answer — see README TODO.
@@ -71,6 +76,13 @@ export async function POST(req: Request) {
   if (Number.isNaN(startsAt.getTime()) || startsAt <= new Date()) {
     return NextResponse.json(
       { error: "Selected time is invalid." },
+      { status: 400 }
+    );
+  }
+  const settings = await getSettings();
+  if (isBeyondBookingWindow(startsAt, settings.maxAdvanceDays)) {
+    return NextResponse.json(
+      { error: BEYOND_WINDOW_MESSAGE },
       { status: 400 }
     );
   }

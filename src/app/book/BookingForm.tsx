@@ -24,9 +24,12 @@ interface Slot {
 export function BookingForm({
   services,
   closedDayOfWeek,
+  maxAdvanceDays,
 }: {
   services: ServiceLite[];
   closedDayOfWeek: number[];
+  /** How far ahead booking is allowed, in days. `null` means no limit. */
+  maxAdvanceDays: number | null;
 }) {
   const [serviceId, setServiceId] = useState<string>(services[0]?.id ?? "");
   const [date, setDate] = useState<Date | undefined>();
@@ -129,6 +132,19 @@ export function BookingForm({
     return format(new Date(nowMs + 24 * 60 * 60 * 1000), "yyyy-MM-dd");
   }, [nowMs]);
 
+  // Latest bookable date, per the "max book-out" setting (null = no limit).
+  const maxBookMs = useMemo(
+    () =>
+      maxAdvanceDays == null || !nowMs
+        ? null
+        : nowMs + maxAdvanceDays * 24 * 60 * 60 * 1000,
+    [maxAdvanceDays, nowMs]
+  );
+  const maxProposeDate = useMemo(
+    () => (maxBookMs == null ? "" : format(new Date(maxBookMs), "yyyy-MM-dd")),
+    [maxBookMs]
+  );
+
   // Stable references for react-day-picker. Passing a fresh `new Date()` or a
   // freshly-built object on every render causes the picker's internal effects
   // to re-run each render, which leads to "Maximum update depth exceeded".
@@ -140,7 +156,21 @@ export function BookingForm({
     d.setHours(0, 0, 0, 0);
     return d;
   }, [nowMs]);
-  const dpDisabled = useMemo(() => ({ before: todayStart }), [todayStart]);
+  // Bucket the max-book date to end-of-day so the whole final day stays
+  // selectable; a fresh object each render would re-run the picker's effects.
+  const maxDayEnd = useMemo(() => {
+    if (maxBookMs == null) return null;
+    const d = new Date(maxBookMs);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, [maxBookMs]);
+  const dpDisabled = useMemo(
+    () =>
+      maxDayEnd
+        ? [{ before: todayStart }, { after: maxDayEnd }]
+        : [{ before: todayStart }],
+    [todayStart, maxDayEnd]
+  );
   const dpModifiers = useMemo(
     () => ({ closed: { dayOfWeek: closedDayOfWeek } }),
     [closedDayOfWeek]
@@ -162,6 +192,14 @@ export function BookingForm({
     const iso = customStartISO();
     if (!iso) return false;
     return new Date(iso).getTime() - nowMs >= 24 * 60 * 60 * 1000;
+  }
+
+  // Within the max book-out window? Always true when no limit is configured.
+  function customWithinWindow(): boolean {
+    if (maxBookMs == null) return true;
+    const iso = customStartISO();
+    if (!iso) return true; // emptiness is handled by the lead-time check
+    return new Date(iso).getTime() <= maxBookMs;
   }
 
   async function submit(e: React.FormEvent) {
@@ -197,6 +235,12 @@ export function BookingForm({
       }
       if (!customLeadOk()) {
         setError("Proposed time must be at least 24 hours in advance.");
+        return;
+      }
+      if (!customWithinWindow()) {
+        setError(
+          "That date is further out than we're currently booking. Please choose a sooner date."
+        );
         return;
       }
       endpoint = "/api/appointments/propose";
@@ -448,6 +492,7 @@ export function BookingForm({
                       type="date"
                       value={customDate}
                       min={minProposeDate}
+                      max={maxProposeDate || undefined}
                       onChange={(e) => setCustomDate(e.target.value)}
                       className="rounded-lg border border-neutral-300 px-3 py-2"
                     />
@@ -476,6 +521,12 @@ export function BookingForm({
                 {customDate && customTime && !customLeadOk() && (
                   <p className="text-xs text-amber-700">
                     Proposed time must be at least 24 hours from now.
+                  </p>
+                )}
+                {customDate && !customWithinWindow() && (
+                  <p className="text-xs text-amber-700">
+                    That date is further out than we&apos;re currently booking.
+                    Please choose a sooner date.
                   </p>
                 )}
               </div>
@@ -570,7 +621,7 @@ export function BookingForm({
           submitting ||
           !agree ||
           (captchaRequired && !captchaToken) ||
-          (proposeMode ? !customLeadOk() : !startISO)
+          (proposeMode ? !customLeadOk() || !customWithinWindow() : !startISO)
         }
         className="w-full rounded-full bg-pink-600 text-white py-3 font-medium disabled:bg-neutral-300"
       >

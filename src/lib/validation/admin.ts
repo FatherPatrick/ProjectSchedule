@@ -35,7 +35,19 @@ import {
 
 export { ALLOWED_GRANULARITIES };
 
-const { granularityField, effectiveFromField, HHMM_REGEX } = _shared;
+const { granularityField, maxAdvanceDaysField, effectiveFromField, HHMM_REGEX } =
+  _shared;
+
+/**
+ * Form-level "max book-out" field. The hours-page <select> posts either the
+ * string "none" (no limit → null) or a number-of-days string. Preprocess into
+ * `number | null`, then validate against the canonical allow-list.
+ */
+const maxAdvanceFormField = z.preprocess((v) => {
+  if (v === "none" || v === "" || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? v : n;
+}, maxAdvanceDaysField);
 
 const optionalNonEmptyString = (max: number) =>
   z
@@ -125,6 +137,7 @@ function formDaysToJson(
  */
 export const businessHoursSaveSchema = z.object({
   granularity: granularityField,
+  maxAdvanceDays: maxAdvanceFormField,
   days: z.array(dayHoursFormSchema).length(7),
 });
 
@@ -144,6 +157,7 @@ function parseDayHoursFromForm(
 export function parseBusinessHoursSaveForm(fd: FormData): BusinessHoursSave {
   const value = businessHoursSaveSchema.parse({
     granularity: fd.get("granularity") ?? 30,
+    maxAdvanceDays: fd.get("maxAdvanceDays") ?? "none",
     days: parseDayHoursFromForm(fd, {
       active: "active",
       open: "open",

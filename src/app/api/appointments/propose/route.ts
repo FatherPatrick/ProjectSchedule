@@ -8,6 +8,11 @@ import { formatBiz } from "@/lib/timezone";
 import { pushToAdmins } from "@/lib/integrations/push";
 import { getClientIp } from "@/lib/rateLimit";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
+import {
+  getSettings,
+  isBeyondBookingWindow,
+  BEYOND_WINDOW_MESSAGE,
+} from "@/lib/domain/settings";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 
@@ -54,6 +59,13 @@ export async function POST(req: Request) {
   if (startsAt.getTime() - Date.now() < MIN_LEAD_MS) {
     return NextResponse.json(
       { error: "Proposed time must be at least 24 hours in the future." },
+      { status: 400 }
+    );
+  }
+  const settings = await getSettings();
+  if (isBeyondBookingWindow(startsAt, settings.maxAdvanceDays)) {
+    return NextResponse.json(
+      { error: BEYOND_WINDOW_MESSAGE },
       { status: 400 }
     );
   }
