@@ -18,6 +18,7 @@ const prismaMock = vi.hoisted(() => ({
   service: { findUnique: vi.fn() },
   appointment: { findFirst: vi.fn(), create: vi.fn() },
   client: { upsert: vi.fn() },
+  setting: { upsert: vi.fn() },
 }));
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
@@ -63,6 +64,13 @@ beforeEach(() => {
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
   prismaMock.appointment.create.mockReset();
   prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_1" });
+  // Default settings: no book-out limit so existing cases are unaffected.
+  prismaMock.setting.upsert.mockReset().mockResolvedValue({
+    id: "default",
+    slotGranularityMin: 15,
+    allowStartAtClose: false,
+    maxAdvanceDays: null,
+  });
 });
 
 afterEach(() => {
@@ -125,6 +133,22 @@ describe("POST /api/appointments — domain rules", () => {
     const past = new Date(Date.now() - 60_000).toISOString();
     const res = await POST(postJson({ ...VALID_BODY, startISO: past }));
     expect(res.status).toBe(400);
+  });
+
+  it("400s when the start time is beyond the max book-out window", async () => {
+    mockServiceOk();
+    prismaMock.setting.upsert.mockResolvedValue({
+      id: "default",
+      slotGranularityMin: 15,
+      allowStartAtClose: false,
+      maxAdvanceDays: 30, // 1 month
+    });
+    const tooFar = new Date(
+      Date.now() + 60 * 24 * 60 * 60 * 1000 // 60 days out
+    ).toISOString();
+    const res = await POST(postJson({ ...VALID_BODY, startISO: tooFar }));
+    expect(res.status).toBe(400);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
   });
 
   it("409s when the slot is already taken", async () => {
