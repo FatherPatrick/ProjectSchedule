@@ -68,23 +68,35 @@ describe("listAdminPhones", () => {
     const { listAdminPhones } = await importFresh();
     prismaMock.adminPhone.findMany.mockResolvedValueOnce([
       {
-        phone: "+15555550001", // shadows env entry
+        phone: "+15555550001", // also in env → stays env-managed (non-removable)
         createdAt: new Date("2026-05-13T00:00:00Z"),
         createdById: "u1",
+        notify: false,
       },
       {
         phone: "+15555550010",
         createdAt: new Date("2026-05-14T00:00:00Z"),
         createdById: null,
+        notify: true,
       },
     ]);
     const rows = await listAdminPhones();
-    // DB rows first, env-only entries after.
+    // DB rows first, env-only entries after. A phone present in ADMIN_PHONES is
+    // reported as source "env" even when a DB row carries its notify setting.
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toMatchObject({ phone: "+15555550001", source: "db" });
-    expect(rows[1]).toMatchObject({ phone: "+15555550010", source: "db" });
+    expect(rows[0]).toMatchObject({
+      phone: "+15555550001",
+      source: "env",
+      notify: false,
+    });
+    expect(rows[1]).toMatchObject({
+      phone: "+15555550010",
+      source: "db",
+      notify: true,
+    });
     expect(rows[2]).toMatchObject({ phone: "+15555550002", source: "env" });
-    // env sentinel timestamp.
+    // env-only entries default notify=on and use the sentinel timestamp.
+    expect(rows[2].notify).toBe(true);
     expect(rows[2].createdAt.getTime()).toBe(0);
   });
 

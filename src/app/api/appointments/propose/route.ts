@@ -6,6 +6,7 @@ import { verifyTurnstileToken } from "@/lib/integrations/captcha";
 import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { formatBiz } from "@/lib/timezone";
 import { pushToAdmins } from "@/lib/integrations/push";
+import { notifyAdminsOfBooking } from "@/lib/integrations/adminSms";
 import { getClientIp } from "@/lib/rateLimit";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
 import {
@@ -131,6 +132,13 @@ export async function POST(req: Request) {
     },
     { appointmentId: appointment.id }
   );
+  // SMS the admins who opted in.
+  notifyAdminsOfBooking({
+    kind: "requested",
+    clientName: data.name,
+    serviceName: service.name,
+    whenLabel: formatBiz(startsAt, "EEE MMM d, h:mm a"),
+  });
 
   return NextResponse.json({
     id: appointment.id,

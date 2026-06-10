@@ -39,31 +39,69 @@ export interface AdminPhoneRow {
   phone: string;
   createdAt: Date;
   createdById: string | null;
+  /** Whether this admin receives booking/request SMS alerts. */
+  notify: boolean;
   /** "db" = managed via the AdminPhone table; "env" = legacy bootstrap. */
   source: "db" | "env";
 }
 
 /**
- * Returns the union of DB-managed admin phones and any env-bootstrap
- * phones not already shadowed by a DB row. DB rows always win when both
- * exist — they carry the audit trail (`createdAt`, `createdById`).
+ * Returns the union of DB-managed admin phones and any env-bootstrap phones.
+ * A phone present in `ADMIN_PHONES` is always reported as `source: "env"`
+ * (non-removable) even when a DB row exists to carry its `notify` setting.
  */
 export async function listAdminPhones(): Promise<AdminPhoneRow[]> {
   const dbRows = await prisma.adminPhone.findMany({
     orderBy: { createdAt: "asc" },
-    select: { phone: true, createdAt: true, createdById: true },
+    select: { phone: true, createdAt: true, createdById: true, notify: true },
   });
-  const dbSet = new Set(dbRows.map((r) => r.phone));
-  const envRows: AdminPhoneRow[] = Array.from(ENV_ADMIN_PHONES)
-    .filter((p) => !dbSet.has(p))
-    .map((phone) => ({
+  const dbPhones = new Set(dbRows.map((r) => r.phone));
+
+  const rows: AdminPhoneRow[] = dbRows.map((r) => ({
+    phone: r.phone,
+    createdAt: r.createdAt,
+    createdById: r.createdById,
+    notify: r.notify,
+    source: ENV_ADMIN_PHONES.has(r.phone) ? "env" : "db",
+  }));
+
+  // Env phones that don't yet have a DB settings row — default notify=on.
+  for (const phone of ENV_ADMIN_PHONES) {
+    if (dbPhones.has(phone)) continue;
+    rows.push({
       phone,
-      // Sentinel — UI uses `source` to decide whether to show this date.
       createdAt: new Date(0),
       createdById: null,
+      notify: true,
       source: "env",
-    }));
-  return [...dbRows.map((r) => ({ ...r, source: "db" as const })), ...envRows];
+    });
+  }
+  return rows;
+}
+
+/**
+ * Enable/disable booking SMS alerts for an admin phone. Upserts a row so the
+ * flag also works for env-bootstrap phones that have no DB row yet (the row is
+ * created purely to carry the setting; it stays env-managed).
+ */
+export async function setAdminNotify(
+  phoneE164: string,
+  notify: boolean
+): Promise<void> {
+  await prisma.adminPhone.upsert({
+    where: { phone: phoneE164 },
+    create: { phone: phoneE164, notify, createdById: null },
+    update: { notify },
+  });
+}
+
+/**
+ * Admin phones that should receive a booking/request SMS — every admin whose
+ * `notify` flag isn't false. Env phones without a row default to on.
+ */
+export async function getNotifiableAdminPhones(): Promise<string[]> {
+  const rows = await listAdminPhones();
+  return rows.filter((r) => r.notify).map((r) => r.phone);
 }
 
 export async function addAdminPhone(

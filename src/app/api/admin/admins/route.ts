@@ -28,6 +28,7 @@ export async function GET() {
     admins: admins.map((a) => ({
       phone: a.phone,
       source: a.source,
+      notify: a.notify,
       // The env-source sentinel `new Date(0)` is dropped client-side; we
       // still emit a real ISO so the JSON shape stays uniform.
       createdAt: a.createdAt.toISOString(),

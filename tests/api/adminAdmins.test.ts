@@ -50,6 +50,7 @@ describe("GET /api/admin/admins", () => {
         phone: "+15555550001",
         createdAt: new Date("2026-05-13T00:00:00Z"),
         createdById: "u1",
+        notify: true,
         source: "db",
       },
     ]);
@@ -61,6 +62,7 @@ describe("GET /api/admin/admins", () => {
         phone: "+15555550001",
         createdAt: "2026-05-13T00:00:00.000Z",
         createdById: "u1",
+        notify: true,
         source: "db",
       },
     ]);

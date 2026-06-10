@@ -165,6 +165,10 @@ model Setting {
 model AdminPhone {
   /// E.164 phone number, e.g. "+15555551212".
   phone       String   @id
+  /// When true, this admin receives an SMS when a client books or requests an
+  /// appointment. Env-bootstrap admins default to notify=true unless a row
+  /// here overrides it.
+  notify      Boolean  @default(true)
   createdAt   DateTime @default(now())
   /// User.id of the admin who invited this phone. Nullable so legacy
   /// rows / SQL-seeded entries don't require a backref.

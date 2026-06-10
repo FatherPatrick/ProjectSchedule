@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { CancelApptButton } from "./CancelApptButton";
 import { ApproveApptButton } from "./ApproveApptButton";
+import { ClearCancelledButton } from "./ClearCancelledButton";
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +11,17 @@ export default async function AdminCalendar() {
   start.setHours(0, 0, 0, 0);
   const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const appts = await prisma.appointment.findMany({
-    where: {
-      startsAt: { gte: start, lte: end },
-      status: { in: ["CONFIRMED", "CANCELLED", "PENDING"] },
-    },
-    orderBy: { startsAt: "asc" },
-    include: { client: true, service: true },
-  });
+  const [appts, cancelledCount] = await Promise.all([
+    prisma.appointment.findMany({
+      where: {
+        startsAt: { gte: start, lte: end },
+        status: { in: ["CONFIRMED", "CANCELLED", "PENDING"] },
+      },
+      orderBy: { startsAt: "asc" },
+      include: { client: true, service: true },
+    }),
+    prisma.appointment.count({ where: { status: "CANCELLED" } }),
+  ]);
 
   const pending = appts.filter((a) => a.status === "PENDING");
   const scheduled = appts.filter((a) => a.status !== "PENDING");
@@ -31,9 +35,12 @@ export default async function AdminCalendar() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">
-        Calendar (next 30 days)
-      </h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Calendar (next 30 days)
+        </h1>
+        {cancelledCount > 0 && <ClearCancelledButton count={cancelledCount} />}
+      </div>
 
       {pending.length > 0 && (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">

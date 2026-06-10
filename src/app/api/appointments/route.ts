@@ -18,6 +18,7 @@ import {
   isBeyondBookingWindow,
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
+import { notifyAdminsOfBooking } from "@/lib/integrations/adminSms";
 
 // First-pass anti-abuse for the public booking endpoint. A captcha
 // (Turnstile / hCaptcha) is the long-term answer — see README TODO.
@@ -141,6 +142,13 @@ export async function POST(req: Request) {
   sendNotifications(appointment.id, "CONFIRMATION").catch((err) =>
     reportError(err, { where: "appointments.create.notify", appointmentId: appointment.id })
   );
+  // Alert admins (those who opted in) that a booking came in.
+  notifyAdminsOfBooking({
+    kind: "booked",
+    clientName: data.name,
+    serviceName: service.name,
+    whenLabel: formatBiz(startsAt, "EEE MMM d, h:mm a"),
+  });
 
   return NextResponse.json({
     id: appointment.id,

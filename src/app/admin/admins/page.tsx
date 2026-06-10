@@ -19,6 +19,7 @@ import {
   listAdminPhones,
   removeAdminPhone,
   requireAdmin,
+  setAdminNotify,
 } from "@/lib/auth/admin";
 import { toE164 } from "@/lib/phone";
 import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
@@ -62,6 +63,15 @@ async function revokeAdmin(phone: string) {
   redirect("/admin/admins?saved=removed");
 }
 
+async function setNotify(phone: string, next: boolean) {
+  "use server";
+  const session = await requireAdmin();
+  if (!session) throw new Error("Unauthorized");
+  await setAdminNotify(phone, next);
+  revalidatePath("/admin/admins");
+  redirect("/admin/admins?saved=notify");
+}
+
 async function maskedInviter(id: string | null): Promise<string> {
   if (!id) return "—";
   const u = await prisma.user.findUnique({
@@ -80,6 +90,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 const SAVED_MESSAGES: Record<string, string> = {
   added: "Admin added.",
   removed: "Admin removed.",
+  notify: "Notification preference updated.",
 };
 
 export default async function AdminsPage({
@@ -167,24 +178,41 @@ export default async function AdminsPage({
                 )}
               </div>
             </div>
-            {a.source === "db" ? (
-              <form action={revokeAdmin.bind(null, a.phone)}>
+            <div className="flex items-center gap-2 shrink-0">
+              <form action={setNotify.bind(null, a.phone, !a.notify)}>
                 <button
                   type="submit"
-                  aria-label={`Remove admin ${a.phone}`}
-                  className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50"
+                  aria-pressed={a.notify}
+                  aria-label={`${a.notify ? "Disable" : "Enable"} booking alerts for ${a.phone}`}
+                  className={
+                    a.notify
+                      ? "text-xs rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 px-3 py-1 hover:bg-emerald-100"
+                      : "text-xs rounded-full border border-neutral-200 text-neutral-500 px-3 py-1 hover:bg-neutral-50"
+                  }
+                  title="Toggle SMS alerts when a client books or requests an appointment"
                 >
-                  Remove
+                  {a.notify ? "Alerts on" : "Alerts off"}
                 </button>
               </form>
-            ) : (
-              <span
-                className="text-xs rounded-full border border-neutral-200 px-3 py-1 text-neutral-500"
-                title="Managed via the ADMIN_PHONES env var"
-              >
-                env-managed
-              </span>
-            )}
+              {a.source === "db" ? (
+                <form action={revokeAdmin.bind(null, a.phone)}>
+                  <button
+                    type="submit"
+                    aria-label={`Remove admin ${a.phone}`}
+                    className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
+                </form>
+              ) : (
+                <span
+                  className="text-xs rounded-full border border-neutral-200 px-3 py-1 text-neutral-500"
+                  title="Managed via the ADMIN_PHONES env var"
+                >
+                  env-managed
+                </span>
+              )}
+            </div>
           </li>
         ))}
         {admins.length === 0 ? (

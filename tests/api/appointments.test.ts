@@ -28,6 +28,9 @@ vi.mock("@/lib/domain/clients", () => ({
 vi.mock("@/lib/integrations/notifications", () => ({
   sendNotifications: vi.fn(async () => undefined),
 }));
+vi.mock("@/lib/integrations/adminSms", () => ({
+  notifyAdminsOfBooking: vi.fn(),
+}));
 
 import { POST } from "@/app/api/appointments/route";
 import { _resetCaptchaDedupeForTests } from "@/lib/integrations/captcha";

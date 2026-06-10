@@ -9,7 +9,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminEitherMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
-  appointment: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+  appointment: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    deleteMany: vi.fn(),
+  },
   service: { findUnique: vi.fn() },
   client: { findUnique: vi.fn(), upsert: vi.fn() },
 }));
@@ -36,6 +41,7 @@ vi.mock("@/lib/integrations/notifications", () => ({
 import { GET, POST } from "@/app/api/admin/appointments/route";
 import { POST as approveRoute } from "@/app/api/admin/appointments/[id]/approve/route";
 import { POST as cancelRoute } from "@/app/api/admin/appointments/[id]/cancel/route";
+import { POST as clearCancelledRoute } from "@/app/api/admin/appointments/clear-cancelled/route";
 
 beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
@@ -53,6 +59,7 @@ beforeEach(() => {
   });
   prismaMock.client.findUnique.mockReset().mockResolvedValue({ id: "client_1" });
   prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_new" });
+  prismaMock.appointment.deleteMany.mockReset().mockResolvedValue({ count: 3 });
   approveMock.mockReset();
   cancelMock.mockReset();
   findClientIdByEmailMock.mockReset().mockResolvedValue(null);
@@ -321,5 +328,32 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
         create: expect.objectContaining({ email: "", emailOptIn: false }),
       })
     );
+  });
+});
+
+
+describe("POST /api/admin/appointments/clear-cancelled", () => {
+  function call(): Promise<Response> {
+    return clearCancelledRoute(
+      new Request("http://localhost/api/admin/appointments/clear-cancelled", {
+        method: "POST",
+      })
+    );
+  }
+
+  it("401s when the caller is not an admin", async () => {
+    requireAdminEitherMock.mockResolvedValue(false);
+    const res = await call();
+    expect(res.status).toBe(401);
+    expect(prismaMock.appointment.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("deletes all CANCELLED appointments and returns the count", async () => {
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, count: 3 });
+    expect(prismaMock.appointment.deleteMany).toHaveBeenCalledWith({
+      where: { status: "CANCELLED" },
+    });
   });
 });
