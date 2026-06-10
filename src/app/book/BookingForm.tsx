@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
 import { TurnstileWidget, isCaptchaEnabled } from "@/components/TurnstileWidget";
+import { POLICIES } from "@/lib/policies";
 
 interface ServiceLite {
   id: string;
@@ -40,10 +41,10 @@ export function BookingForm({
   const [customTime, setCustomTime] = useState<string>("");
   const [customNotes, setCustomNotes] = useState<string>("");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [agree, setAgree] = useState(false);
+  const [agreePolicies, setAgreePolicies] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaRequired = isCaptchaEnabled();
@@ -213,6 +214,10 @@ export function BookingForm({
       setError("Please agree to the terms and cancellation policy.");
       return;
     }
+    if (!agreePolicies) {
+      setError("Please acknowledge the studio policies.");
+      return;
+    }
     if (captchaRequired && !captchaToken) {
       setError("Please complete the captcha challenge.");
       return;
@@ -222,7 +227,6 @@ export function BookingForm({
       serviceId,
       startISO,
       name,
-      email,
       phone,
       smsOptIn,
       captchaToken,
@@ -248,7 +252,6 @@ export function BookingForm({
         serviceId,
         startISO: iso,
         name,
-        email,
         phone,
         smsOptIn,
         notes: customNotes || undefined,
@@ -548,14 +551,6 @@ export function BookingForm({
           />
           <input
             required
-            type="email"
-            placeholder="Email"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            required
             type="tel"
             placeholder="Mobile phone (e.g. +1 555 123 4567)"
             className="w-full rounded-lg border border-neutral-300 px-3 py-2"
@@ -599,6 +594,26 @@ export function BookingForm({
               .
             </span>
           </label>
+
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+            <p className="mb-1 text-sm font-medium text-neutral-700">
+              Studio policies
+            </p>
+            <ul className="max-h-44 list-disc space-y-1 overflow-auto pl-5 text-xs text-neutral-600">
+              {POLICIES.map((policy) => (
+                <li key={policy}>{policy}</li>
+              ))}
+            </ul>
+            <label className="mt-2 flex items-start gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={agreePolicies}
+                onChange={(e) => setAgreePolicies(e.target.checked)}
+              />
+              <span>I have read and agree to the studio policies above.</span>
+            </label>
+          </div>
         </fieldset>
       )}
 
@@ -620,6 +635,7 @@ export function BookingForm({
         disabled={
           submitting ||
           !agree ||
+          !agreePolicies ||
           (captchaRequired && !captchaToken) ||
           (proposeMode ? !customLeadOk() || !customWithinWindow() : !startISO)
         }

@@ -6,7 +6,9 @@ export const appointmentRequestSchema = z.object({
   serviceId: z.string().min(1),
   startISO: z.string().datetime(),
   name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email(),
+  // Optional for now — bookings only need a name + phone (SMS is the channel).
+  // When provided it must be a valid address.
+  email: z.string().trim().email().optional(),
   phone: z
     .string()
     .trim()

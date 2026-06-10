@@ -92,15 +92,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const existingClientId = await findClientIdByEmail(data.email);
+  const email = data.email?.trim().toLowerCase() ?? "";
+  const existingClientId = email ? await findClientIdByEmail(email) : null;
   const client = await prisma.client.upsert({
     where: { id: existingClientId ?? "__nope__" },
     create: {
       name: data.name,
-      email: data.email.toLowerCase(),
+      email,
       phone: data.phone,
       smsOptIn: data.smsOptIn,
-      emailOptIn: true,
+      emailOptIn: Boolean(email),
     },
     update: {
       name: data.name,

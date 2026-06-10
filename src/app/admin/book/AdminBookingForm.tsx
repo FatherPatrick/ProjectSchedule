@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PrettySelect } from "@/components/PrettySelect";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
@@ -57,16 +57,19 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
   }));
 
   // Debounced client search. Skipped once a client is selected or in new mode.
+  // All state updates happen inside the (deferred) timeout, never synchronously
+  // in the effect body — that would trigger cascading renders.
   useEffect(() => {
     if (mode !== "existing" || selected) return;
     const q = query.trim();
-    if (q.length < 1) {
-      setResults([]);
-      return;
-    }
     let cancelled = false;
-    setSearching(true);
     const t = setTimeout(() => {
+      if (q.length < 1) {
+        setResults([]);
+        setSearching(false);
+        return;
+      }
+      setSearching(true);
       fetch(`/api/admin/clients?q=${encodeURIComponent(q)}`)
         .then((r) => r.json() as Promise<ClientSearchResponse>)
         .then((d) => {

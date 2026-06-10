@@ -74,6 +74,7 @@ export default function RootLayout({
               © {new Date().getFullYear()} {BUSINESS_NAME}
             </span>
             <div className="flex gap-4">
+              <Link href="/policies">Policies</Link>
               <Link href="/privacy">Privacy</Link>
               <Link href="/terms">Terms</Link>
               <Link href="/cancellation-policy">Cancellation</Link>

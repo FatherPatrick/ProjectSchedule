@@ -106,15 +106,18 @@ export async function POST(req: Request) {
     );
   }
 
-  // Look up or create client by email (lightweight dedupe).
+  // Look up or create client. Email is optional; when present we dedupe by it
+  // and enable email notifications, otherwise we store "" and go SMS-only.
+  const email = data.email?.trim().toLowerCase() ?? "";
+  const existingId = email ? await findClientIdByEmail(email) : null;
   const client = await prisma.client.upsert({
-    where: { id: (await findClientIdByEmail(data.email)) ?? "__nope__" },
+    where: { id: existingId ?? "__nope__" },
     create: {
       name: data.name,
-      email: data.email.toLowerCase(),
+      email,
       phone: data.phone,
       smsOptIn: data.smsOptIn,
-      emailOptIn: true,
+      emailOptIn: Boolean(email),
     },
     update: {
       name: data.name,
