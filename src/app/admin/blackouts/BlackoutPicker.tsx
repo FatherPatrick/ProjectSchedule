@@ -6,6 +6,9 @@ import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { TextInput } from "@/components/TextInput";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
 
 export function BlackoutPicker() {
@@ -66,7 +69,7 @@ export function BlackoutPicker() {
     : "Select one or more days";
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3">
+    <Card className="space-y-3">
       <div className="text-sm font-medium">{summary}</div>
 
       <div className="overflow-x-auto">
@@ -110,12 +113,12 @@ export function BlackoutPicker() {
         </div>
       )}
 
-      <input
+      <TextInput
         aria-label="Blackout reason (optional)"
         placeholder="Reason (optional)"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+        className="w-full"
       />
 
       {error && (
@@ -128,25 +131,25 @@ export function BlackoutPicker() {
       )}
 
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
           onClick={submit}
           disabled={pending || !range?.from}
-          className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium disabled:bg-neutral-300"
         >
           {pending ? "Saving…" : "Add blackout"}
-        </button>
+        </Button>
         {range?.from && (
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={reset}
-            className="rounded-full border border-neutral-300 px-4 py-2 text-sm"
+            className="text-sm"
           >
             Clear
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -162,7 +165,10 @@ export function DeleteBlackoutButton({
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
-    <button
+    <Button
+      type="button"
+      variant="danger"
+      size="sm"
       disabled={pending}
       aria-label={label ? `Remove blackout ${label}` : "Remove blackout"}
       onClick={() => {
@@ -177,9 +183,8 @@ export function DeleteBlackoutButton({
           }
         });
       }}
-      className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"
     >
       {pending ? "…" : "Remove"}
-    </button>
+    </Button>
   );
 }

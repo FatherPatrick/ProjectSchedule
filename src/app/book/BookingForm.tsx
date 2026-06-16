@@ -6,6 +6,9 @@ import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { TextInput } from "@/components/TextInput";
 import { TurnstileWidget, isCaptchaEnabled } from "@/components/TurnstileWidget";
 import { POLICIES } from "@/lib/policies";
 
@@ -355,7 +358,7 @@ export function BookingForm({
   return (
     <form onSubmit={submit} className="space-y-6">
       {/* Service */}
-      <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4">
+      <Card as="fieldset">
         <legend className="px-2 text-sm font-medium">1. Choose a service</legend>
         <div className="grid gap-2 sm:grid-cols-2 items-stretch">
           {services.map((s) => {
@@ -395,10 +398,10 @@ export function BookingForm({
             );
           })}
         </div>
-      </fieldset>
+      </Card>
 
       {/* Date */}
-      <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4">
+      <Card as="fieldset">
         <legend className="px-2 text-sm font-medium">2. Pick a date</legend>
         <div className="overflow-x-auto">
           <DayPicker
@@ -422,11 +425,11 @@ export function BookingForm({
             propose a custom time for review.
           </p>
         </div>
-      </fieldset>
+      </Card>
 
       {/* Time */}
       {date && (
-        <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4 space-y-3">
+        <Card as="fieldset" className="space-y-3">
           <legend className="px-2 text-sm font-medium">3. Pick a time</legend>
           {slotsLoading ? (
             <p className="text-sm text-neutral-500">Loading times…</p>
@@ -491,13 +494,12 @@ export function BookingForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <label className="text-sm flex flex-col gap-1">
                     Date
-                    <input
+                    <TextInput
                       type="date"
                       value={customDate}
                       min={minProposeDate}
                       max={maxProposeDate || undefined}
                       onChange={(e) => setCustomDate(e.target.value)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2"
                     />
                   </label>
                   <label className="text-sm flex flex-col gap-1">
@@ -535,25 +537,25 @@ export function BookingForm({
               </div>
             )}
           </div>
-        </fieldset>
+        </Card>
       )}
 
       {/* Contact */}
       {(startISO || (proposeMode && customLeadOk())) && (
-        <fieldset className="rounded-2xl bg-white border border-neutral-200 p-4 space-y-3">
+        <Card as="fieldset" className="space-y-3">
           <legend className="px-2 text-sm font-medium">4. Your info</legend>
-          <input
+          <TextInput
             required
             placeholder="Full name"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            className="w-full"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <input
+          <TextInput
             required
             type="tel"
             placeholder="Mobile phone (e.g. +1 555 123 4567)"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            className="w-full"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
@@ -614,7 +616,7 @@ export function BookingForm({
               <span>I have read and agree to the studio policies above.</span>
             </label>
           </div>
-        </fieldset>
+        </Card>
       )}
 
       {error && (
@@ -630,8 +632,10 @@ export function BookingForm({
         />
       )}
 
-      <button
+      <Button
         type="submit"
+        fullWidth
+        className="py-3"
         disabled={
           submitting ||
           !agree ||
@@ -639,7 +643,6 @@ export function BookingForm({
           (captchaRequired && !captchaToken) ||
           (proposeMode ? !customLeadOk() || !customWithinWindow() : !startISO)
         }
-        className="w-full rounded-full bg-pink-600 text-white py-3 font-medium disabled:bg-neutral-300"
       >
         {submitting
           ? proposeMode
@@ -652,7 +655,7 @@ export function BookingForm({
             : service
               ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
               : "Book"}
-      </button>
+      </Button>
     </form>
   );
 }

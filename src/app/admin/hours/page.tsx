@@ -12,8 +12,10 @@ import {
 } from "@/lib/validation/admin";
 import { bizDateKey, formatBiz } from "@/lib/timezone";
 import { PrettySelect } from "@/components/PrettySelect";
-import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
 import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
+import { DayHoursRow } from "./DayHoursRow";
 
 export const dynamic = "force-dynamic";
 
@@ -165,48 +167,28 @@ export default async function HoursAdmin({
       <h1 className="text-2xl font-semibold tracking-tight">
         Business hours & booking interval
       </h1>
-      <form
+      <Card
+        as="form"
         id="hours-form"
         key={`hours-${settings.slotGranularityMin}-${settings.maxAdvanceDays ?? "none"}`}
         action={saveHours}
-        className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4"
+        className="space-y-4"
       >
         <UnsavedChangesGuard />
         <div className="space-y-3">
           {DOWS.map((label, d) => {
-          const r = byDay.get(d);
-          return (
-            <div
-              key={d}
-              className="flex flex-wrap items-center gap-3 border-b border-neutral-100 last:border-0 pb-2"
-            >
-              <label className="w-28 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name={`active-${d}`}
-                  defaultChecked={r?.active ?? false}
-                />
-                <span className="font-medium">{label}</span>
-              </label>
-              <label className="text-sm flex items-center gap-1">
-                Open
-                <PrettyTimeField
-                  name={`open-${d}`}
-                  defaultValue={minutesToHhmm(r?.openMin ?? 9 * 60)}
-                  ariaLabel={`${label} open time`}
-                />
-              </label>
-              <label className="text-sm flex items-center gap-1">
-                Close
-                <PrettyTimeField
-                  name={`close-${d}`}
-                  defaultValue={minutesToHhmm(r?.closeMin ?? 18 * 60)}
-                  ariaLabel={`${label} close time`}
-                />
-              </label>
-            </div>
-          );
-        })}
+            const r = byDay.get(d);
+            return (
+              <DayHoursRow
+                key={d}
+                label={label}
+                dayIndex={d}
+                active={r?.active ?? false}
+                openMin={r?.openMin ?? 9 * 60}
+                closeMin={r?.closeMin ?? 18 * 60}
+              />
+            );
+          })}
         </div>
 
         <div className="border-t border-neutral-200 pt-3">
@@ -244,12 +226,10 @@ export default async function HoursAdmin({
           />
         </div>
 
-        <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
-          Save changes
-        </button>
-      </form>
+        <Button type="submit">Save changes</Button>
+      </Card>
 
-      <section className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
+      <Card as="section" className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">
             Scheduled future changes
@@ -360,44 +340,22 @@ export default async function HoursAdmin({
               {DOWS.map((label, d) => {
                 const r = byDay.get(d);
                 return (
-                  <div
+                  <DayHoursRow
                     key={d}
-                    className="flex flex-wrap items-center gap-3 border-b border-neutral-100 last:border-0 pb-2"
-                  >
-                    <label className="w-28 flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        name={`s-active-${d}`}
-                        defaultChecked={r?.active ?? false}
-                      />
-                      <span className="font-medium">{label}</span>
-                    </label>
-                    <label className="text-sm flex items-center gap-1">
-                      Open
-                      <PrettyTimeField
-                        name={`s-open-${d}`}
-                        defaultValue={minutesToHhmm(r?.openMin ?? 9 * 60)}
-                        ariaLabel={`${label} scheduled open time`}
-                      />
-                    </label>
-                    <label className="text-sm flex items-center gap-1">
-                      Close
-                      <PrettyTimeField
-                        name={`s-close-${d}`}
-                        defaultValue={minutesToHhmm(r?.closeMin ?? 18 * 60)}
-                        ariaLabel={`${label} scheduled close time`}
-                      />
-                    </label>
-                  </div>
+                    label={label}
+                    dayIndex={d}
+                    scheduled
+                    active={r?.active ?? false}
+                    openMin={r?.openMin ?? 9 * 60}
+                    closeMin={r?.closeMin ?? 18 * 60}
+                  />
                 );
               })}
             </div>
-            <button className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
-              Schedule change
-            </button>
+            <Button type="submit">Schedule change</Button>
           </form>
         </details>
-      </section>
+      </Card>
     </div>
   );
 }

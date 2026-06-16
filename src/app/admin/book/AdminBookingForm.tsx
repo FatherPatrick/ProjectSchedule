@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { PrettySelect } from "@/components/PrettySelect";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { TextInput } from "@/components/TextInput";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
 import { formatDuration, formatPrice, cn } from "@/lib/utils";
 import type { ClientLiteDTO, ClientSearchResponse } from "@/lib/api-types";
@@ -186,7 +189,7 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
   return (
     <form onSubmit={submit} className="space-y-5">
       {/* Service */}
-      <fieldset className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-2">
+      <Card as="fieldset" className="space-y-2">
         <legend className="px-2 text-sm font-medium">Service</legend>
         <PrettySelect
           value={serviceId}
@@ -195,20 +198,19 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
           triggerClassName="min-w-[18rem]"
           options={serviceOptions}
         />
-      </fieldset>
+      </Card>
 
       {/* When */}
-      <fieldset className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3">
+      <Card as="fieldset" className="space-y-3">
         <legend className="px-2 text-sm font-medium">Date &amp; time</legend>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-sm flex flex-col gap-1">
             Date
-            <input
+            <TextInput
               type="date"
               value={date}
               min={todayKey}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-lg border border-neutral-300 px-3 py-2"
             />
           </label>
           <label className="text-sm flex flex-col gap-1">
@@ -225,10 +227,10 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
             />
           </label>
         </div>
-      </fieldset>
+      </Card>
 
       {/* Client */}
-      <fieldset className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3">
+      <Card as="fieldset" className="space-y-3">
         <legend className="px-2 text-sm font-medium">Client</legend>
         <div className="inline-flex rounded-full border border-neutral-200 p-0.5 text-sm">
           {(["existing", "new"] as const).map((m) => (
@@ -274,12 +276,12 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
               </div>
             ) : (
               <div className="relative">
-                <input
+                <TextInput
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search by name, email, or phone"
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+                  className="w-full"
                 />
                 {query.trim() && (
                   <ul className="mt-1 max-h-56 overflow-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
@@ -317,19 +319,19 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
           </div>
         ) : (
           <div className="space-y-2">
-            <input
+            <TextInput
               type="text"
               placeholder="Full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+              className="w-full"
             />
-            <input
+            <TextInput
               type="tel"
               placeholder="Mobile phone (e.g. +1 555 123 4567)"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+              className="w-full"
             />
             <label className="flex items-center gap-2 text-sm text-neutral-700">
               <input
@@ -341,10 +343,10 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
             </label>
           </div>
         )}
-      </fieldset>
+      </Card>
 
       {/* Options */}
-      <fieldset className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3">
+      <Card as="fieldset" className="space-y-3">
         <legend className="px-2 text-sm font-medium">Options</legend>
         <label className="flex items-start gap-2 text-sm text-neutral-700">
           <input
@@ -368,7 +370,7 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
             className="rounded-lg border border-neutral-300 px-3 py-2"
           />
         </label>
-      </fieldset>
+      </Card>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -376,13 +378,9 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting || !canSubmit}
-        className="rounded-full bg-pink-600 px-5 py-2.5 font-medium text-white disabled:bg-neutral-300"
-      >
+      <Button type="submit" size="lg" disabled={submitting || !canSubmit}>
         {submitting ? "Booking…" : "Book appointment"}
-      </button>
+      </Button>
     </form>
   );
 }

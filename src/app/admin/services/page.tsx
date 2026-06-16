@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 import { assertAdmin } from "@/lib/auth/admin";
 import { parseServiceCreateForm } from "@/lib/validation/admin";
 import { formatDuration, formatPrice } from "@/lib/utils";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { TextInput } from "@/components/TextInput";
 import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
 import { ServiceRow } from "./ServiceRow";
 
@@ -43,19 +46,19 @@ export default async function ServicesAdmin() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Services</h1>
 
-      <form
+      <Card
+        as="form"
         id="new-service-form"
         action={createService}
-        className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-2"
+        className="space-y-2"
       >
         <UnsavedChangesGuard />
         <div className="grid sm:grid-cols-2 gap-2">
-          <input
+          <TextInput
             name="name"
             aria-label="Service name"
             placeholder="Name (e.g. Gel Manicure)"
             required
-            className="rounded-lg border border-neutral-300 px-3 py-2"
           />
           <div className="flex items-stretch gap-2">
             <label className="flex-1 flex items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2">
@@ -84,7 +87,7 @@ export default async function ServicesAdmin() {
               <span aria-hidden="true" className="text-sm text-neutral-500">min</span>
             </label>
           </div>
-          <input
+          <TextInput
             name="priceDollars"
             type="number"
             min={0}
@@ -92,19 +95,15 @@ export default async function ServicesAdmin() {
             aria-label="Price in US dollars"
             placeholder="Price (USD)"
             required
-            className="rounded-lg border border-neutral-300 px-3 py-2"
           />
-          <input
+          <TextInput
             name="description"
             aria-label="Service description (optional)"
             placeholder="Short description (optional)"
-            className="rounded-lg border border-neutral-300 px-3 py-2"
           />
         </div>
-        <button type="submit" className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium">
-          Add service
-        </button>
-      </form>
+        <Button type="submit">Add service</Button>
+      </Card>
 
       <ul className="divide-y divide-neutral-200 rounded-2xl bg-white border border-neutral-200">
         {services.map((s) => (
@@ -117,22 +116,24 @@ export default async function ServicesAdmin() {
             actions={
               <>
                 <form action={toggleService.bind(null, s.id, !s.active)}>
-                  <button
+                  <Button
                     type="submit"
+                    variant="secondary"
+                    size="sm"
                     aria-label={`${s.active ? "Deactivate" : "Activate"} ${s.name}`}
-                    className="text-sm rounded-full border border-neutral-300 px-3 py-1"
                   >
                     {s.active ? "Deactivate" : "Activate"}
-                  </button>
+                  </Button>
                 </form>
                 <form action={deleteService.bind(null, s.id)}>
-                  <button
+                  <Button
                     type="submit"
+                    variant="danger"
+                    size="sm"
                     aria-label={`Delete ${s.name}`}
-                    className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </form>
               </>
             }

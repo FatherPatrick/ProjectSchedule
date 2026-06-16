@@ -112,35 +112,4 @@ Open <http://localhost:3000>.
 - **Privacy/Terms/Cancellation:** Templates in `src/app/{privacy,terms,cancellation-policy}`
   — review with a lawyer before publishing.
 
-## TODO
-
-### Deployment / release
-
-- **Mobile admin app env:** before deploying the mobile auth endpoints
-  (`/api/auth/mobile/*`), set `MOBILE_TOKEN_SECRET` to a long random string
-  in production env. Falls back to `AUTH_SECRET` / `NEXTAUTH_SECRET` for dev.
-- **Mobile app identity:** replace the Expo placeholder app name, icon,
-  splash screen, and URL scheme in `mobile/app.json` before any TestFlight /
-  Play Internal build.
-- **Mobile EAS / store builds:** configure `eas.json` build profiles
-  (development / preview / production), set up Apple + Google signing
-  credentials, and wire EAS Submit for TestFlight and Play Internal Testing.
-- **In-app toasts (mobile):** replace blocking `Alert.alert` success
-  feedback with a non-blocking toast (e.g. `burnt` or `react-native-toast-message`).
-
-### Tech debt
-
-- **Real-DB integration tests.** *(Skipped for now.)* Layer the
-  existing route-handler tests with a Testcontainers-managed Postgres
-  so we exercise actual Prisma migrations + SQL constraints (e.g.
-  unique `(serviceId, startsAt)` in the appointment table, the
-  `Settings` singleton row). Slower suite, gated by Docker
-  availability — revisit if regressions slip past the mocked tests.
-
-### Long-term / product
-
-- Fix mobile styling, mainly for admin pages
-- Styling changes and styling customization for admins
-- Investigate personal email domains
-- Investigate email confirmation/reminders
-- Investigate making this work for many different admins
+See [TODO.md](TODO.md) for the project's outstanding tasks.

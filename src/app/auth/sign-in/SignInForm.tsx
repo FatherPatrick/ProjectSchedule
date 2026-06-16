@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { Button } from "@/components/Button";
+import { TextInput } from "@/components/TextInput";
 
 export function SignInForm({
   callbackUrl,
@@ -71,7 +73,7 @@ export function SignInForm({
       {step === "phone" ? (
         <form onSubmit={requestCode} className="space-y-2">
           <label className="block text-sm font-medium">Phone number</label>
-          <input
+          <TextInput
             name="phone"
             type="tel"
             autoComplete="tel"
@@ -79,14 +81,11 @@ export function SignInForm({
             placeholder="(555) 123-4567"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+            className="w-full"
           />
-          <button
-            disabled={busy}
-            className="w-full rounded-full bg-pink-600 text-white py-2 font-medium disabled:opacity-50"
-          >
+          <Button type="submit" fullWidth disabled={busy}>
             {busy ? "Sending…" : "Text me a code"}
-          </button>
+          </Button>
           {devHint && (
             <label className="flex items-center gap-2 pt-1 text-xs text-amber-700">
               <input
@@ -116,7 +115,7 @@ export function SignInForm({
             </button>
           </p>
           <label className="block text-sm font-medium">Verification code</label>
-          <input
+          <TextInput
             name="code"
             type="text"
             inputMode="numeric"
@@ -127,14 +126,11 @@ export function SignInForm({
             placeholder="123456"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 tracking-widest text-center text-lg"
+            className="w-full tracking-widest text-center text-lg"
           />
-          <button
-            disabled={busy || code.length !== 6}
-            className="w-full rounded-full bg-pink-600 text-white py-2 font-medium disabled:opacity-50"
-          >
+          <Button type="submit" fullWidth disabled={busy || code.length !== 6}>
             {busy ? "Verifying…" : "Sign in"}
-          </button>
+          </Button>
         </form>
       )}
 

@@ -22,6 +22,9 @@ import {
   setAdminNotify,
 } from "@/lib/auth/admin";
 import { toE164 } from "@/lib/phone";
+import { Button } from "@/components/Button";
+import { Card } from "@/components/Card";
+import { TextInput } from "@/components/TextInput";
 import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
 
 export const dynamic = "force-dynamic";
@@ -128,36 +131,32 @@ export default async function AdminsPage({
         </div>
       ) : null}
 
-      <form
+      <Card
+        as="form"
         id="invite-admin-form"
         action={inviteAdmin}
-        className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-3"
+        className="space-y-3"
       >
         <UnsavedChangesGuard />
         <label className="block text-sm font-medium text-neutral-700">
           Invite admin by phone
         </label>
         <div className="flex flex-wrap gap-2">
-          <input
+          <TextInput
             name="phone"
             type="tel"
             required
             placeholder="+15555551212"
             aria-label="Phone number in E.164 format"
-            className="flex-1 min-w-[14rem] rounded-lg border border-neutral-300 px-3 py-2"
+            className="flex-1 min-w-[14rem]"
           />
-          <button
-            type="submit"
-            className="rounded-full bg-pink-600 text-white px-4 py-2 font-medium"
-          >
-            Add admin
-          </button>
+          <Button type="submit">Add admin</Button>
         </div>
         <p className="text-xs text-neutral-500">
           They&apos;ll be able to sign in via SMS code the next time they
           request one. No notification is sent.
         </p>
-      </form>
+      </Card>
 
       <ul className="divide-y divide-neutral-200 rounded-2xl bg-white border border-neutral-200">
         {admins.map((a, i) => (
@@ -196,13 +195,14 @@ export default async function AdminsPage({
               </form>
               {a.source === "db" ? (
                 <form action={revokeAdmin.bind(null, a.phone)}>
-                  <button
+                  <Button
                     type="submit"
+                    variant="danger"
+                    size="sm"
                     aria-label={`Remove admin ${a.phone}`}
-                    className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </form>
               ) : (
                 <span

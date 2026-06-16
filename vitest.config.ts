@@ -5,8 +5,10 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
+    // Node is the default; UI tests opt into jsdom via a
+    // `// @vitest-environment jsdom` docblock at the top of the file.
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.{ts,tsx}"],
     globals: false,
   },
 });
