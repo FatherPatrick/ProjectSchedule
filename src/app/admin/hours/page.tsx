@@ -1,7 +1,5 @@
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { assertAdmin } from "@/lib/auth/admin";
+import { adminAction } from "@/lib/admin/serverAction";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/domain/dates";
 import {
@@ -48,78 +46,75 @@ const MAX_ADVANCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 
 async function saveHours(formData: FormData) {
   "use server";
-  await assertAdmin();
-  const { granularity, maxAdvanceDays, days } =
-    parseBusinessHoursSaveForm(formData);
-  await prisma.$transaction([
-    ...days.map((day, d) =>
-      prisma.businessHours.upsert({
-        where: { dayOfWeek: d },
-        update: {
-          active: day.active,
-          openMin: hhmmToMinutes(day.open),
-          closeMin: hhmmToMinutes(day.close),
-        },
-        create: {
-          dayOfWeek: d,
-          active: day.active,
-          openMin: hhmmToMinutes(day.open),
-          closeMin: hhmmToMinutes(day.close),
-        },
-      })
-    ),
-  ]);
-  await updateSettings({ slotGranularityMin: granularity, maxAdvanceDays });
-  revalidatePath("/admin/hours");
-  redirect("/admin/hours?saved=hours");
+  await adminAction("/admin/hours", "hours", async () => {
+    const { granularity, maxAdvanceDays, days } =
+      parseBusinessHoursSaveForm(formData);
+    await prisma.$transaction([
+      ...days.map((day, d) =>
+        prisma.businessHours.upsert({
+          where: { dayOfWeek: d },
+          update: {
+            active: day.active,
+            openMin: hhmmToMinutes(day.open),
+            closeMin: hhmmToMinutes(day.close),
+          },
+          create: {
+            dayOfWeek: d,
+            active: day.active,
+            openMin: hhmmToMinutes(day.open),
+            closeMin: hhmmToMinutes(day.close),
+          },
+        })
+      ),
+    ]);
+    await updateSettings({ slotGranularityMin: granularity, maxAdvanceDays });
+  });
 }
 
 async function addScheduledChange(formData: FormData) {
   "use server";
-  await assertAdmin();
-  const { effectiveFrom: dateStr, note, days } =
-    parseScheduledChangeCreateForm(formData);
-  const today = bizDateKey(new Date());
-  if (dateStr <= today) {
-    throw new Error("Effective date must be in the future");
-  }
-  const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
+  await adminAction("/admin/hours", "schedule", async () => {
+    const { effectiveFrom: dateStr, note, days } =
+      parseScheduledChangeCreateForm(formData);
+    const today = bizDateKey(new Date());
+    if (dateStr <= today) {
+      throw new Error("Effective date must be in the future");
+    }
+    const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
 
-  await prisma.$transaction(
-    days.map((day, d) =>
-      prisma.businessHoursSchedule.upsert({
-        where: {
-          effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: d },
-        },
-        update: {
-          openMin: hhmmToMinutes(day.open),
-          closeMin: hhmmToMinutes(day.close),
-          active: day.active,
-          note,
-        },
-        create: {
-          effectiveFrom,
-          dayOfWeek: d,
-          openMin: hhmmToMinutes(day.open),
-          closeMin: hhmmToMinutes(day.close),
-          active: day.active,
-          note,
-        },
-      })
-    )
-  );
-  revalidatePath("/admin/hours");
-  redirect("/admin/hours?saved=schedule");
+    await prisma.$transaction(
+      days.map((day, d) =>
+        prisma.businessHoursSchedule.upsert({
+          where: {
+            effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: d },
+          },
+          update: {
+            openMin: hhmmToMinutes(day.open),
+            closeMin: hhmmToMinutes(day.close),
+            active: day.active,
+            note,
+          },
+          create: {
+            effectiveFrom,
+            dayOfWeek: d,
+            openMin: hhmmToMinutes(day.open),
+            closeMin: hhmmToMinutes(day.close),
+            active: day.active,
+            note,
+          },
+        })
+      )
+    );
+  });
 }
 
 async function deleteScheduledChange(formData: FormData) {
   "use server";
-  await assertAdmin();
-  const { effectiveFrom: dateStr } = parseScheduledChangeDeleteForm(formData);
-  const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
-  await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
-  revalidatePath("/admin/hours");
-  redirect("/admin/hours?saved=deleted");
+  await adminAction("/admin/hours", "deleted", async () => {
+    const { effectiveFrom: dateStr } = parseScheduledChangeDeleteForm(formData);
+    const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
+    await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
+  });
 }
 
 export default async function HoursAdmin({

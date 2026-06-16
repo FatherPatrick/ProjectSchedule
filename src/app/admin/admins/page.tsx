@@ -22,10 +22,12 @@ import {
   setAdminNotify,
 } from "@/lib/auth/admin";
 import { toE164 } from "@/lib/phone";
+import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { TextInput } from "@/components/TextInput";
 import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard";
+import { ERROR_MESSAGES, SAVED_MESSAGES } from "@/app/admin/toastMessages";
 
 export const dynamic = "force-dynamic";
 
@@ -84,18 +86,6 @@ async function maskedInviter(id: string | null): Promise<string> {
   return u?.phone ?? u?.email ?? "—";
 }
 
-const ERROR_MESSAGES: Record<string, string> = {
-  invalid: "That doesn't look like a valid phone number.",
-  env: "This phone is managed via the ADMIN_PHONES env var and can't be removed here.",
-  self: "You can't remove your own admin access.",
-};
-
-const SAVED_MESSAGES: Record<string, string> = {
-  added: "Admin added.",
-  removed: "Admin removed.",
-  notify: "Notification preference updated.",
-};
-
 export default async function AdminsPage({
   searchParams,
 }: {
@@ -115,20 +105,14 @@ export default async function AdminsPage({
       <h1 className="text-2xl font-semibold tracking-tight">Admins</h1>
 
       {saved && SAVED_MESSAGES[saved] ? (
-        <div
-          role="status"
-          className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
-        >
+        <Alert tone="success" role="status" className="p-3">
           {SAVED_MESSAGES[saved]}
-        </div>
+        </Alert>
       ) : null}
       {error && ERROR_MESSAGES[error] ? (
-        <div
-          role="alert"
-          className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900"
-        >
+        <Alert tone="error" role="alert" className="p-3">
           {ERROR_MESSAGES[error]}
-        </div>
+        </Alert>
       ) : null}
 
       <Card

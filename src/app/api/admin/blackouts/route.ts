@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/auth/admin";
-import { parseJsonBody } from "@/lib/http/parseJsonBody";
+import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { bizWallClockToUTC } from "@/lib/timezone";
 import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
 import type { BlackoutsListResponse } from "@/lib/api-types";
 
-export async function GET(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdmin(async (req) => {
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
   const rows = await prisma.blackout.findMany({
@@ -25,19 +21,10 @@ export async function GET(req: Request) {
       reason: b.reason,
     })),
   } satisfies BlackoutsListResponse);
-}
+});
 
-export async function POST(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const body = await parseJsonBody(req);
-  if (!body.ok) return body.response;
-  const parsed = blackoutCreateSchema.safeParse(body.data);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input." }, { status: 400 });
-  }
-  const { fromDay, toDay, allDay, startTime, endTime, reason } = parsed.data;
+export const POST = withAdminJson(blackoutCreateSchema, async (data) => {
+  const { fromDay, toDay, allDay, startTime, endTime, reason } = data;
 
   let startsAt: Date;
   let endsAt: Date;
@@ -75,4 +62,4 @@ export async function POST(req: Request) {
     data: { startsAt, endsAt, reason },
   });
   return NextResponse.json({ id: created.id });
-}
+});

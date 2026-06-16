@@ -1,23 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PrettySelect } from "@/components/PrettySelect";
-import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
-import { Card } from "@/components/Card";
-import { TextInput } from "@/components/TextInput";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
-import { formatDuration, formatPrice, cn } from "@/lib/utils";
+import { formatDuration, formatPrice, localDateKey } from "@/lib/utils";
 import type { ClientLiteDTO, ClientSearchResponse } from "@/lib/api-types";
-
-interface ServiceLite {
-  id: string;
-  name: string;
-  durationMinutes: number;
-  priceCents: number;
-}
-
-type ClientMode = "existing" | "new";
+import { ServiceSelector } from "./ServiceSelector";
+import { DateTimeFields } from "./DateTimeFields";
+import { ClientSelector } from "./ClientSelector";
+import { OptionsPanel } from "./OptionsPanel";
+import { AdminBookingResultCard } from "./AdminBookingResultCard";
+import type { ClientMode, ServiceLite } from "./types";
 
 export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
@@ -46,13 +40,8 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
     null
   );
 
-  const todayKey = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    // Local YYYY-MM-DD for the date input's min.
-    const off = d.getTimezoneOffset() * 60_000;
-    return new Date(d.getTime() - off).toISOString().slice(0, 10);
-  })[0];
+  // Local YYYY-MM-DD for the date input's min. Computed once at mount.
+  const todayKey = useState(() => localDateKey(new Date()))[0];
 
   const serviceOptions = services.map((s) => ({
     value: s.id,
@@ -166,216 +155,64 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
-        <h2 className="text-xl font-semibold text-emerald-900">
-          Appointment booked
-        </h2>
-        <p className="mt-2 text-emerald-900">
-          <strong>{done.serviceName}</strong> is confirmed for{" "}
-          <strong>{done.when}</strong>
-          {notify ? " — the client has been notified." : "."}
-        </p>
-        <button
-          type="button"
-          onClick={reset}
-          className="mt-4 rounded-full border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
-        >
-          Book another
-        </button>
-      </div>
+      <AdminBookingResultCard done={done} notify={notify} onReset={reset} />
     );
   }
 
   return (
     <form onSubmit={submit} className="space-y-5">
-      {/* Service */}
-      <Card as="fieldset" className="space-y-2">
-        <legend className="px-2 text-sm font-medium">Service</legend>
-        <PrettySelect
-          value={serviceId}
-          onChange={setServiceId}
-          ariaLabel="Service"
-          triggerClassName="min-w-[18rem]"
-          options={serviceOptions}
-        />
-      </Card>
+      <ServiceSelector
+        value={serviceId}
+        onChange={setServiceId}
+        options={serviceOptions}
+      />
 
-      {/* When */}
-      <Card as="fieldset" className="space-y-3">
-        <legend className="px-2 text-sm font-medium">Date &amp; time</legend>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="text-sm flex flex-col gap-1">
-            Date
-            <TextInput
-              type="date"
-              value={date}
-              min={todayKey}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </label>
-          <label className="text-sm flex flex-col gap-1">
-            Time
-            <PrettyTimeField
-              value={time}
-              onChange={setTime}
-              ariaLabel="Appointment time"
-              className="w-full"
-              inputProps={{
-                className:
-                  "w-full rounded-lg border border-neutral-300 px-3 py-2",
-              }}
-            />
-          </label>
-        </div>
-      </Card>
+      <DateTimeFields
+        date={date}
+        time={time}
+        todayKey={todayKey}
+        onDateChange={setDate}
+        onTimeChange={setTime}
+      />
 
-      {/* Client */}
-      <Card as="fieldset" className="space-y-3">
-        <legend className="px-2 text-sm font-medium">Client</legend>
-        <div className="inline-flex rounded-full border border-neutral-200 p-0.5 text-sm">
-          {(["existing", "new"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => {
-                setMode(m);
-                setError(null);
-              }}
-              className={cn(
-                "rounded-full px-3 py-1 font-medium transition-colors",
-                mode === m
-                  ? "bg-pink-600 text-white"
-                  : "text-neutral-600 hover:text-pink-700"
-              )}
-            >
-              {m === "existing" ? "Existing client" : "New client"}
-            </button>
-          ))}
-        </div>
+      <ClientSelector
+        mode={mode}
+        onModeChange={(m) => {
+          setMode(m);
+          setError(null);
+        }}
+        selected={selected}
+        query={query}
+        results={results}
+        searching={searching}
+        onQueryChange={setQuery}
+        onSelect={(c) => {
+          setSelected(c);
+          setResults([]);
+        }}
+        onClearSelected={() => {
+          setSelected(null);
+          setQuery("");
+        }}
+        name={name}
+        phone={phone}
+        smsOptIn={smsOptIn}
+        onNameChange={setName}
+        onPhoneChange={setPhone}
+        onSmsOptInChange={setSmsOptIn}
+      />
 
-        {mode === "existing" ? (
-          <div className="space-y-2">
-            {selected ? (
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-pink-200 bg-pink-50 p-3">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{selected.name}</div>
-                  <div className="text-xs text-neutral-600 truncate">
-                    {[selected.email, selected.phone].filter(Boolean).join(" · ")}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(null);
-                    setQuery("");
-                  }}
-                  className="text-xs text-pink-700 underline underline-offset-2 shrink-0"
-                >
-                  Change
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <TextInput
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name, email, or phone"
-                  className="w-full"
-                />
-                {query.trim() && (
-                  <ul className="mt-1 max-h-56 overflow-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
-                    {searching && results.length === 0 ? (
-                      <li className="px-3 py-2 text-sm text-neutral-500">
-                        Searching…
-                      </li>
-                    ) : results.length === 0 ? (
-                      <li className="px-3 py-2 text-sm text-neutral-500">
-                        No matches. Use “New client” to add them.
-                      </li>
-                    ) : (
-                      results.map((c) => (
-                        <li key={c.id}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelected(c);
-                              setResults([]);
-                            }}
-                            className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-pink-50"
-                          >
-                            <span className="font-medium">{c.name}</span>
-                            <span className="text-xs text-neutral-500">
-                              {[c.email, c.phone].filter(Boolean).join(" · ")}
-                            </span>
-                          </button>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <TextInput
-              type="text"
-              placeholder="Full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full"
-            />
-            <TextInput
-              type="tel"
-              placeholder="Mobile phone (e.g. +1 555 123 4567)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full"
-            />
-            <label className="flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                checked={smsOptIn}
-                onChange={(e) => setSmsOptIn(e.target.checked)}
-              />
-              Client agreed to appointment texts
-            </label>
-          </div>
-        )}
-      </Card>
-
-      {/* Options */}
-      <Card as="fieldset" className="space-y-3">
-        <legend className="px-2 text-sm font-medium">Options</legend>
-        <label className="flex items-start gap-2 text-sm text-neutral-700">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={notify}
-            onChange={(e) => setNotify(e.target.checked)}
-          />
-          <span>
-            Send the client a confirmation now and a 24-hour reminder. Uncheck to
-            book silently.
-          </span>
-        </label>
-        <label className="text-sm flex flex-col gap-1">
-          Notes (optional)
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Internal note for this appointment"
-            className="rounded-lg border border-neutral-300 px-3 py-2"
-          />
-        </label>
-      </Card>
+      <OptionsPanel
+        notify={notify}
+        notes={notes}
+        onNotifyChange={setNotify}
+        onNotesChange={setNotes}
+      />
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <Alert tone="error" role="alert" className="rounded-xl p-3">
           {error}
-        </div>
+        </Alert>
       )}
 
       <Button type="submit" size="lg" disabled={submitting || !canSubmit}>

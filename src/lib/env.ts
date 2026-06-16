@@ -79,6 +79,10 @@ const baseSchema = z.object({
   // CORS dev allow-list.
   MOBILE_DEV_ORIGINS: z.string().optional(),
 
+  // Structured logging level (consumed by observability/logger.ts). When
+  // unset, the logger defaults by NODE_ENV (debug in dev, info otherwise).
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+
   // Cloudflare Turnstile (booking-form captcha). Optional in every
   // environment — when unset, `verifyTurnstileToken` is a no-op.
   // Setting one without the other is a misconfiguration: requests will

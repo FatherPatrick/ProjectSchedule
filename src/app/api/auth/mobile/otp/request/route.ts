@@ -5,6 +5,7 @@ import { isAdminPhone } from "@/lib/auth/admin";
 import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { sendOtp } from "@/lib/integrations/verify";
 import { reportError } from "@/lib/observability/reportError";
+import { logger } from "@/lib/observability/logger";
 import {
   checkRateLimit,
   getClientIp,
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
       );
     }
   } else {
-    console.warn("[mobile-otp] request for non-admin phone", e164);
+    logger.warn("[mobile-otp] request for non-admin phone", { phone: e164 });
   }
 
   return NextResponse.json({ ok: true });

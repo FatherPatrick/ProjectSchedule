@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/auth/admin";
+import { withAdmin } from "@/lib/http/withAdmin";
 import type { ClientSearchResponse } from "@/lib/api-types";
 
 /**
@@ -10,11 +10,7 @@ import type { ClientSearchResponse } from "@/lib/api-types";
  */
 const MAX_ROWS = 10;
 
-export async function GET(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAdmin(async (req) => {
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   if (q.length < 1) {
     return NextResponse.json({ data: [] } satisfies ClientSearchResponse);
@@ -34,4 +30,4 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({ data: rows } satisfies ClientSearchResponse);
-}
+});

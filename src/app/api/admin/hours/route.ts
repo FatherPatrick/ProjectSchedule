@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/auth/admin";
-import { parseJsonBody } from "@/lib/http/parseJsonBody";
+import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { businessHoursJsonSaveSchema } from "@/lib/validation/adminJson";
 import type { HoursResponse } from "@/lib/api-types";
 
@@ -9,10 +8,7 @@ import type { HoursResponse } from "@/lib/api-types";
  * GET — returns all 7 weekly default rows (creating any missing rows on the
  * fly is the responsibility of the caller; this endpoint just reads).
  */
-export async function GET(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdmin(async () => {
   const rows = await prisma.businessHours.findMany({
     orderBy: { dayOfWeek: "asc" },
   });
@@ -28,25 +24,13 @@ export async function GET(req: Request) {
     };
   });
   return NextResponse.json({ data: { days } } satisfies HoursResponse);
-}
+});
 
 /**
  * PUT — replace all 7 weekly defaults atomically.
  */
-export async function PUT(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const body = await parseJsonBody(req);
-  if (!body.ok) return body.response;
-  const parsed = businessHoursJsonSaveSchema.safeParse(body.data);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input." },
-      { status: 400 }
-    );
-  }
-  for (const d of parsed.data.days) {
+export const PUT = withAdminJson(businessHoursJsonSaveSchema, async (data) => {
+  for (const d of data.days) {
     if (d.closeMin < d.openMin) {
       return NextResponse.json(
         { error: `Day ${d.dayOfWeek}: close must be at or after open.` },
@@ -56,7 +40,7 @@ export async function PUT(req: Request) {
   }
 
   await prisma.$transaction(
-    parsed.data.days.map((day) =>
+    data.days.map((day) =>
       prisma.businessHours.upsert({
         where: { dayOfWeek: day.dayOfWeek },
         update: {
@@ -74,4 +58,4 @@ export async function PUT(req: Request) {
     )
   );
   return NextResponse.json({ ok: true });
-}
+});

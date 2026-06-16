@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/auth/admin";
-import { parseJsonBody } from "@/lib/http/parseJsonBody";
+import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { businessHoursScheduleJsonCreateSchema } from "@/lib/validation/adminJson";
 import { bizDateKey } from "@/lib/timezone";
 import type { HoursOverride, HoursScheduleResponse } from "@/lib/api-types";
@@ -9,10 +8,7 @@ import type { HoursOverride, HoursScheduleResponse } from "@/lib/api-types";
 /**
  * GET — list future overrides (`effectiveFrom > today`), grouped by date.
  */
-export async function GET(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdmin(async (req) => {
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
 
@@ -42,63 +38,54 @@ export async function GET(req: Request) {
   return NextResponse.json({
     data: [...byDate.values()],
   } satisfies HoursScheduleResponse);
-}
+});
 
 /**
  * POST — upsert all 7 override rows for one `effectiveFrom` date.
  */
-export async function POST(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const body = await parseJsonBody(req);
-  if (!body.ok) return body.response;
-  const parsed = businessHoursScheduleJsonCreateSchema.safeParse(body.data);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input." },
-      { status: 400 }
-    );
-  }
-  const { effectiveFrom: dateStr, note, days } = parsed.data;
-  if (dateStr <= bizDateKey(new Date())) {
-    return NextResponse.json(
-      { error: "Effective date must be in the future." },
-      { status: 400 }
-    );
-  }
-  for (const d of days) {
-    if (d.closeMin < d.openMin) {
+export const POST = withAdminJson(
+  businessHoursScheduleJsonCreateSchema,
+  async (data) => {
+    const { effectiveFrom: dateStr, note, days } = data;
+    if (dateStr <= bizDateKey(new Date())) {
       return NextResponse.json(
-        { error: `Day ${d.dayOfWeek}: close must be at or after open.` },
+        { error: "Effective date must be in the future." },
         { status: 400 }
       );
     }
-  }
-  const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
+    for (const d of days) {
+      if (d.closeMin < d.openMin) {
+        return NextResponse.json(
+          { error: `Day ${d.dayOfWeek}: close must be at or after open.` },
+          { status: 400 }
+        );
+      }
+    }
+    const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
 
-  await prisma.$transaction(
-    days.map((day) =>
-      prisma.businessHoursSchedule.upsert({
-        where: {
-          effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: day.dayOfWeek },
-        },
-        update: {
-          openMin: day.openMin,
-          closeMin: day.closeMin,
-          active: day.active,
-          note,
-        },
-        create: {
-          effectiveFrom,
-          dayOfWeek: day.dayOfWeek,
-          openMin: day.openMin,
-          closeMin: day.closeMin,
-          active: day.active,
-          note,
-        },
-      })
-    )
-  );
-  return NextResponse.json({ ok: true });
-}
+    await prisma.$transaction(
+      days.map((day) =>
+        prisma.businessHoursSchedule.upsert({
+          where: {
+            effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: day.dayOfWeek },
+          },
+          update: {
+            openMin: day.openMin,
+            closeMin: day.closeMin,
+            active: day.active,
+            note,
+          },
+          create: {
+            effectiveFrom,
+            dayOfWeek: day.dayOfWeek,
+            openMin: day.openMin,
+            closeMin: day.closeMin,
+            active: day.active,
+            note,
+          },
+        })
+      )
+    );
+    return NextResponse.json({ ok: true });
+  }
+);

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { Alert } from "@/components/Alert";
 import { AdminBookingForm } from "./AdminBookingForm";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +25,9 @@ export default async function AdminBookPage() {
       </header>
 
       {services.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <Alert tone="warning">
           No active services yet. Add a service before booking.
-        </div>
+        </Alert>
       ) : (
         <AdminBookingForm services={services} />
       )}

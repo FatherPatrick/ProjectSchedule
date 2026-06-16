@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { CANCELLATION_WINDOW_HOURS } from "@/lib/config";
+import { Alert } from "@/components/Alert";
 import { CancelButton } from "./CancelButton";
 
 export const dynamic = "force-dynamic";
@@ -50,20 +51,20 @@ export default async function ManageAppointmentPage({
 
       {appt.status === "PENDING" ? (
         <div className="space-y-3">
-          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <Alert tone="warning" className="rounded-xl p-3">
             Your proposed time is awaiting review. We&apos;ll email you once
             it&apos;s confirmed or if we need to suggest a different time.
-          </p>
+          </Alert>
           <CancelButton token={token} label="Withdraw request" />
         </div>
       ) : appt.status === "CONFIRMED" ? (
         canCancel ? (
           <CancelButton token={token} />
         ) : (
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <Alert tone="warning" className="rounded-xl p-3">
             This appointment is within the {CANCELLATION_WINDOW_HOURS}-hour
             cancellation window. Please call the studio to cancel.
-          </p>
+          </Alert>
         )
       ) : (
         <p className="text-sm text-neutral-500">

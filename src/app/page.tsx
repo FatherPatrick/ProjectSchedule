@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_NAME } from "@/lib/config";
 import { formatDuration, formatPrice } from "@/lib/utils";
+import { ButtonLink } from "@/components/ButtonLink";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +27,9 @@ export default async function Home() {
           works for you, and we&apos;ll send confirmation by email and text.
         </p>
         <div className="mt-6">
-          <Link
-            href="/book"
-            className="inline-flex items-center justify-center rounded-full bg-pink-600 text-white px-6 py-3 font-medium hover:bg-pink-700"
-          >
+          <ButtonLink href="/book" size="lg" className="px-6 py-3">
             Book an appointment
-          </Link>
+          </ButtonLink>
         </div>
       </section>
 

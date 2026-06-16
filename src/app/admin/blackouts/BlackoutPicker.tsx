@@ -6,10 +6,12 @@ import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { format } from "date-fns";
 import { PrettyTimeField } from "@/components/PrettyTimeField";
+import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { TextInput } from "@/components/TextInput";
 import { notifyAdminToast } from "@/app/admin/AdminToaster";
+import { useAdminAction } from "@/app/admin/useAdminAction";
 
 export function BlackoutPicker() {
   const router = useRouter();
@@ -122,12 +124,9 @@ export function BlackoutPicker() {
       />
 
       {error && (
-        <p
-          role="alert"
-          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-2"
-        >
+        <Alert tone="error" role="alert" className="rounded-lg p-2">
           {error}
-        </p>
+        </Alert>
       )}
 
       <div className="flex gap-2">
@@ -162,8 +161,7 @@ export function DeleteBlackoutButton({
    *  for screen readers (e.g. "Friday, May 15"). */
   label?: string;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
+  const { pending, run } = useAdminAction();
   return (
     <Button
       type="button"
@@ -173,14 +171,11 @@ export function DeleteBlackoutButton({
       aria-label={label ? `Remove blackout ${label}` : "Remove blackout"}
       onClick={() => {
         if (!confirm("Remove this blackout?")) return;
-        start(async () => {
-          const res = await fetch(`/api/admin/blackouts/${id}`, { method: "DELETE" });
-          router.refresh();
-          if (res.ok) {
-            notifyAdminToast({ message: "Blackout removed." });
-          } else {
-            notifyAdminToast({ kind: "error", message: "Could not remove blackout." });
-          }
+        run({
+          request: () =>
+            fetch(`/api/admin/blackouts/${id}`, { method: "DELETE" }),
+          success: "Blackout removed.",
+          failure: "Could not remove blackout.",
         });
       }}
     >

@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import { requireAdminEither } from "@/lib/auth/admin";
+import { withAdmin } from "@/lib/http/withAdmin";
 import { approveAppointment } from "@/lib/domain/appointments";
 
-export async function POST(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = withAdmin(
+  async (_req, { params }: { params: Promise<{ id: string }> }) => {
+    const { id } = await params;
+    const result = await approveAppointment(id);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+    return NextResponse.json({ ok: true });
   }
-  const { id } = await params;
-  const result = await approveAppointment(id);
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
-  return NextResponse.json({ ok: true });
-}
+);

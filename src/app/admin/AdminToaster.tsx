@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ERROR_MESSAGES, SAVED_MESSAGES } from "@/app/admin/toastMessages";
 
 type ToastKind = "success" | "error";
 
@@ -57,16 +58,14 @@ function AdminToasterInner() {
     const error = searchParams.get("error");
     if (!saved && !error) return;
 
+    const kind: ToastKind = error ? "error" : "success";
+    const message = error
+      ? ERROR_MESSAGES[error] ?? error
+      : (saved && SAVED_MESSAGES[saved]) || DEFAULT_MESSAGES.success;
+
     const id = Date.now() + Math.random();
     queueMicrotask(() => {
-      setToasts((prev) => [
-        ...prev,
-        {
-          id,
-          kind: error ? "error" : "success",
-          message: error ?? DEFAULT_MESSAGES.success,
-        },
-      ]);
+      setToasts((prev) => [...prev, { id, kind, message }]);
     });
 
     // Strip the params so reloads don't re-fire the toast.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
 import { TextInput } from "@/components/TextInput";
 
@@ -135,9 +136,9 @@ export function SignInForm({
       )}
 
       {error && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <Alert tone="error" role="alert" className="rounded-lg px-3 py-2">
           {error}
-        </p>
+        </Alert>
       )}
 
       {devHint && (

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
+import { Alert } from "@/components/Alert";
 import { BookingForm } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +34,10 @@ export default async function BookPage() {
       </header>
 
       {services.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <Alert tone="warning">
           No services are configured yet. An admin needs to add services
           before bookings can be taken.
-        </div>
+        </Alert>
       ) : (
         <BookingForm
           closedDayOfWeek={closedDayOfWeek}

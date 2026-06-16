@@ -1,9 +1,15 @@
 import type { ClassValue } from "clsx";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { format } from "date-fns";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/** Local-timezone `YYYY-MM-DD` key for a Date — used by client date inputs. */
+export function localDateKey(date: Date): string {
+  return format(date, "yyyy-MM-dd");
 }
 
 export function formatPrice(cents: number) {

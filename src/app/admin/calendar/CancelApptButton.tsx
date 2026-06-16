@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { notifyAdminToast } from "@/app/admin/AdminToaster";
+import { useState } from "react";
+import { Button } from "@/components/Button";
+import { useAdminAction } from "@/app/admin/useAdminAction";
 
 export function CancelApptButton({
   id,
@@ -15,9 +15,7 @@ export function CancelApptButton({
    *  used to disambiguate this button for screen readers. */
   appointmentLabel?: string;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
+  const { pending, error: err, run, clearError } = useAdminAction();
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -25,27 +23,19 @@ export function CancelApptButton({
 
   function submit() {
     const note = message.trim();
-    start(async () => {
-      const res = await fetch(`/api/admin/appointments/${id}/cancel`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(note ? { message: note } : {}),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        setErr(j.error ?? "Could not cancel.");
-        notifyAdminToast({
-          kind: "error",
-          message: j.error ?? "Could not cancel.",
-        });
-        return;
-      }
-      setShowForm(false);
-      setMessage("");
-      router.refresh();
-      notifyAdminToast({
-        message: isDecline ? "Request declined." : "Appointment cancelled.",
-      });
+    run({
+      request: () =>
+        fetch(`/api/admin/appointments/${id}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(note ? { message: note } : {}),
+        }),
+      success: isDecline ? "Request declined." : "Appointment cancelled.",
+      failure: "Could not cancel.",
+      onSuccess: () => {
+        setShowForm(false);
+        setMessage("");
+      },
     });
   }
 
@@ -79,7 +69,7 @@ export function CancelApptButton({
             onClick={() => {
               setShowForm(false);
               setMessage("");
-              setErr(null);
+              clearError();
             }}
             className="text-xs rounded-full border border-neutral-300 px-3 py-1 hover:bg-neutral-100 disabled:opacity-50"
           >
@@ -105,7 +95,10 @@ export function CancelApptButton({
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
+      <Button
+        type="button"
+        variant="danger"
+        size="sm"
         disabled={pending}
         aria-label={
           appointmentLabel
@@ -113,13 +106,12 @@ export function CancelApptButton({
             : label
         }
         onClick={() => {
-          setErr(null);
+          clearError();
           setShowForm(true);
         }}
-        className="text-sm rounded-full border border-red-200 text-red-700 px-3 py-1 hover:bg-red-50 disabled:opacity-50"
       >
-        {pending ? "\u2026" : label}
-      </button>
+        {pending ? "…" : label}
+      </Button>
       {err && (
         <span role="alert" className="text-xs text-red-700">
           {err}

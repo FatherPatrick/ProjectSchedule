@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ButtonLink";
 
 export default function NotFound() {
   return (
@@ -8,12 +8,9 @@ export default function NotFound() {
         <p className="mt-2 text-neutral-600">
           The page you&apos;re looking for doesn&apos;t exist.
         </p>
-        <Link
-          href="/"
-          className="mt-4 inline-block rounded-lg bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700"
-        >
+        <ButtonLink href="/" className="mt-4 rounded-lg text-sm">
           Go home
-        </Link>
+        </ButtonLink>
       </div>
     </div>
   );

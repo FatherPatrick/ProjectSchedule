@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { requireAdminEither } from "@/lib/auth/admin";
-import { parseJsonBody } from "@/lib/http/parseJsonBody";
+import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { serviceJsonCreateSchema } from "@/lib/validation/adminJson";
 import type {
   ServiceCreateResponse,
   ServicesListResponse,
 } from "@/lib/api-types";
 
-export async function GET(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdmin(async (req) => {
   const url = new URL(req.url);
   const includeInactive = url.searchParams.get("includeInactive") !== "false";
 
@@ -31,23 +27,10 @@ export async function GET(req: Request) {
       sortOrder: s.sortOrder,
     })),
   } satisfies ServicesListResponse);
-}
+});
 
-export async function POST(req: Request) {
-  if (!(await requireAdminEither(req))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const body = await parseJsonBody(req);
-  if (!body.ok) return body.response;
-  const parsed = serviceJsonCreateSchema.safeParse(body.data);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid input." },
-      { status: 400 }
-    );
-  }
-
-  const { sortOrder, ...rest } = parsed.data;
+export const POST = withAdminJson(serviceJsonCreateSchema, async (input) => {
+  const { sortOrder, ...rest } = input;
   const data: Prisma.ServiceCreateInput = {
     ...rest,
     sortOrder: sortOrder ?? 0,
@@ -57,4 +40,4 @@ export async function POST(req: Request) {
     { data: { id: created.id } } satisfies ServiceCreateResponse,
     { status: 201 }
   );
-}
+});

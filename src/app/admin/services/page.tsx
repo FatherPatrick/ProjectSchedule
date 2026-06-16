@@ -1,7 +1,5 @@
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { assertAdmin } from "@/lib/auth/admin";
+import { adminAction } from "@/lib/admin/serverAction";
 import { parseServiceCreateForm } from "@/lib/validation/admin";
 import { formatDuration, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/Button";
@@ -14,27 +12,24 @@ export const dynamic = "force-dynamic";
 
 async function createService(formData: FormData) {
   "use server";
-  await assertAdmin();
-  const data = parseServiceCreateForm(formData);
-  await prisma.service.create({ data });
-  revalidatePath("/admin/services");
-  redirect("/admin/services?saved=created");
+  await adminAction("/admin/services", "created", async () => {
+    const data = parseServiceCreateForm(formData);
+    await prisma.service.create({ data });
+  });
 }
 
 async function toggleService(id: string, active: boolean) {
   "use server";
-  await assertAdmin();
-  await prisma.service.update({ where: { id }, data: { active } });
-  revalidatePath("/admin/services");
-  redirect("/admin/services?saved=toggled");
+  await adminAction("/admin/services", "toggled", async () => {
+    await prisma.service.update({ where: { id }, data: { active } });
+  });
 }
 
 async function deleteService(id: string) {
   "use server";
-  await assertAdmin();
-  await prisma.service.delete({ where: { id } });
-  revalidatePath("/admin/services");
-  redirect("/admin/services?saved=deleted");
+  await adminAction("/admin/services", "deleted", async () => {
+    await prisma.service.delete({ where: { id } });
+  });
 }
 
 export default async function ServicesAdmin() {
