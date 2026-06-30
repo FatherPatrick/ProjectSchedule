@@ -16,6 +16,10 @@ export interface AppSettings {
    * Defaults to {@link DEFAULT_MAX_ADVANCE_DAYS} (1 month) for new installs.
    */
   maxAdvanceDays: number | null;
+  /** When true, marking an appointment COMPLETED fires a review-request email/SMS. */
+  reviewRequestEnabled: boolean;
+  /** URL clients are directed to when leaving a review (e.g. Google Maps review link). */
+  reviewRequestUrl: string | null;
 }
 
 export async function getSettings(): Promise<AppSettings> {
@@ -32,6 +36,8 @@ export async function getSettings(): Promise<AppSettings> {
     slotGranularityMin: row.slotGranularityMin,
     allowStartAtClose: row.allowStartAtClose,
     maxAdvanceDays: row.maxAdvanceDays,
+    reviewRequestEnabled: row.reviewRequestEnabled,
+    reviewRequestUrl: row.reviewRequestUrl,
   };
 }
 

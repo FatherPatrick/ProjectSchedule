@@ -150,12 +150,16 @@ model BusinessHoursSchedule {
 }
 
 model Setting {
-  id                 String  @id
-  slotGranularityMin Int
-  allowStartAtClose  Boolean @default(false)
+  id                    String  @id
+  slotGranularityMin    Int
+  allowStartAtClose     Boolean @default(false)
   /// How far in advance clients may book, in days. NULL means no limit.
   /// Enforced on the public booking + propose paths and the availability API.
-  maxAdvanceDays     Int?
+  maxAdvanceDays        Int?
+  /// When true, marking an appointment COMPLETED fires a review-request email/SMS.
+  reviewRequestEnabled  Boolean @default(false)
+  /// URL clients are directed to when leaving a review (e.g. Google Maps review link).
+  reviewRequestUrl      String?
 }
 
 /// DB-managed admin allow-list. A phone is considered an admin if it
@@ -238,6 +242,7 @@ enum NotificationKind {
   CONFIRMATION
   REMINDER_24H
   CANCELLATION
+  REVIEW_REQUEST
 }
 
 enum NotificationStatus {

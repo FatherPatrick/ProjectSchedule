@@ -5,7 +5,12 @@ import { BookingForm } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function BookPage() {
+export default async function BookPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ serviceId?: string }>;
+}) {
+  const { serviceId: initialServiceId } = await searchParams;
   const [services, hours, settings] = await Promise.all([
     prisma.service.findMany({
       where: { active: true },
@@ -42,6 +47,7 @@ export default async function BookPage() {
         <BookingForm
           closedDayOfWeek={closedDayOfWeek}
           maxAdvanceDays={settings.maxAdvanceDays}
+          initialServiceId={initialServiceId}
           services={services.map((s) => ({
             id: s.id,
             name: s.name,

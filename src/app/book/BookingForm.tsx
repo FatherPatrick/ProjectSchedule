@@ -23,13 +23,20 @@ export function BookingForm({
   services,
   closedDayOfWeek,
   maxAdvanceDays,
+  initialServiceId,
 }: {
   services: ServiceLite[];
   closedDayOfWeek: number[];
   /** How far ahead booking is allowed, in days. `null` means no limit. */
   maxAdvanceDays: number | null;
+  /** Pre-select a service (e.g. from a rebook link). Falls back to first service. */
+  initialServiceId?: string;
 }) {
-  const [serviceId, setServiceId] = useState<string>(services[0]?.id ?? "");
+  const resolvedInitialId =
+    initialServiceId && services.some((s) => s.id === initialServiceId)
+      ? initialServiceId
+      : (services[0]?.id ?? "");
+  const [serviceId, setServiceId] = useState<string>(resolvedInitialId);
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<Slot[]>([]);
   const [startISO, setStartISO] = useState<string | null>(null);

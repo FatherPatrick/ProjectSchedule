@@ -84,12 +84,12 @@ function emit(level: LogLevel, msg: string, fields?: LogFields): void {
       _serializeError: "log payload was not serializable",
     });
   }
-  // stderr for warn/error, stdout for the rest — matches conventional
-  // pino behavior and lets log shippers split severity by stream.
+  // console.error/log are available in all runtimes (Node, Edge, browser).
+  // process.stdout/stderr.write is Node-only and fails in the Edge Runtime.
   if (level === "warn" || level === "error") {
-    process.stderr.write(line + "\n");
+    console.error(line);
   } else {
-    process.stdout.write(line + "\n");
+    console.log(line);
   }
 }
 

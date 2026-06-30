@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Contact,
   LayoutDashboard,
   Sparkles,
   Users,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/admin/clients", label: "Clients", icon: Contact },
   { href: "/admin/book", label: "New booking", icon: CalendarPlus },
   { href: "/admin/services", label: "Services", icon: Sparkles },
   { href: "/admin/blackouts", label: "Blackouts", icon: CalendarOff },
