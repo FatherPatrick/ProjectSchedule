@@ -117,6 +117,18 @@ async function deleteScheduledChange(formData: FormData) {
   });
 }
 
+async function saveNotificationSettings(formData: FormData) {
+  "use server";
+  await adminAction("/admin/hours", "notifications", async () => {
+    const enabled = formData.get("reviewRequestEnabled") === "on";
+    const url = (formData.get("reviewRequestUrl") as string | null)?.trim() || null;
+    if (url && !/^https?:\/\/.+/.test(url)) {
+      throw new Error("Review link must be a valid URL starting with http:// or https://");
+    }
+    await updateSettings({ reviewRequestEnabled: enabled, reviewRequestUrl: url });
+  });
+}
+
 export default async function HoursAdmin({
   searchParams,
 }: {
@@ -222,6 +234,54 @@ export default async function HoursAdmin({
         </div>
 
         <Button type="submit">Save changes</Button>
+      </Card>
+
+      <Card
+        as="form"
+        key={`review-${settings.reviewRequestEnabled}-${settings.reviewRequestUrl ?? ""}`}
+        action={saveNotificationSettings}
+        className="space-y-4"
+      >
+        <UnsavedChangesGuard />
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Client notifications
+          </h2>
+          <p className="text-sm text-neutral-600">
+            After you mark an appointment complete, optionally send the client
+            an email asking for a review.
+          </p>
+        </div>
+
+        <label className="flex items-center gap-3 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            name="reviewRequestEnabled"
+            defaultChecked={settings.reviewRequestEnabled}
+            className="rounded border-neutral-300"
+          />
+          <span>Send review request when appointment is marked complete</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium mb-1" htmlFor="reviewRequestUrl">
+            Review link URL
+          </label>
+          <p className="text-xs text-neutral-500 mb-1.5">
+            Paste your Google Maps or Yelp review link here. Sent to clients in
+            the review request email and SMS.
+          </p>
+          <input
+            id="reviewRequestUrl"
+            type="url"
+            name="reviewRequestUrl"
+            defaultValue={settings.reviewRequestUrl ?? ""}
+            placeholder="https://g.page/r/your-google-review-link"
+            className="w-full max-w-md rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+
+        <Button type="submit">Save notification settings</Button>
       </Card>
 
       <Card as="section" className="space-y-4">

@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { CancelApptButton } from "./CancelApptButton";
 import { ApproveApptButton } from "./ApproveApptButton";
 import { ClearCancelledButton } from "./ClearCancelledButton";
+import { CompleteApptButton } from "./CompleteApptButton";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +58,12 @@ export default async function AdminCalendar() {
                 <div>
                   <div className="font-medium">
                     {formatBiz(a.startsAt, "EEE, MMM d 'at' h:mm a")} —{" "}
-                    {a.client.name}
+                    <Link
+                      href={`/admin/clients/${a.client.id}`}
+                      className="hover:text-pink-600 transition-colors"
+                    >
+                      {a.client.name}
+                    </Link>
                   </div>
                   <div className="text-sm text-neutral-500">
                     {a.service.name} · {a.client.email}
@@ -101,7 +108,13 @@ export default async function AdminCalendar() {
               >
                 <div>
                   <div className="font-medium">
-                    {formatBiz(a.startsAt, "h:mm a")} — {a.client.name}
+                    {formatBiz(a.startsAt, "h:mm a")} —{" "}
+                    <Link
+                      href={`/admin/clients/${a.client.id}`}
+                      className="hover:text-pink-600 transition-colors"
+                    >
+                      {a.client.name}
+                    </Link>
                   </div>
                   <div className="text-sm text-neutral-500">
                     {a.service.name}
@@ -111,10 +124,16 @@ export default async function AdminCalendar() {
                   </div>
                 </div>
                 {a.status === "CONFIRMED" && (
-                  <CancelApptButton
-                    id={a.id}
-                    appointmentLabel={`${a.client.name} at ${formatBiz(a.startsAt, "h:mm a")}`}
-                  />
+                  <div className="flex gap-2 shrink-0">
+                    <CompleteApptButton
+                      id={a.id}
+                      appointmentLabel={`${a.client.name} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                    />
+                    <CancelApptButton
+                      id={a.id}
+                      appointmentLabel={`${a.client.name} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                    />
+                  </div>
                 )}
               </li>
             ))}

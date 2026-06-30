@@ -32,6 +32,19 @@
 ## Long-term / product
 
 - Fix mobile styling, mainly for admin pages
-- Multi-tenant: support multiple salons, each with their own admins/clients — see [docs/MULTI_TENANT_SPEC.md](docs/MULTI_TENANT_SPEC.md)
-- Salon appearance: per-salon brand colors, logo & font customization — see [docs/STYLING_SPEC.md](docs/STYLING_SPEC.md)
-- Stripe payments: admin-toggleable client payments + billing/revenue dashboard (Stripe Connect) — see [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
+
+### Spec rollout order
+
+Multi-tenant is a prerequisite for the other three specs — each one adds
+`salonId`-shaped schema (themes on `Salon`, Stripe Connect accounts per
+salon, tenant-scoped feature settings) that would need a second migration
+pass if built first.
+
+1. **Multi-tenant** — support multiple salons, each with their own admins/clients. See [docs/MULTI_TENANT_SPEC.md](docs/MULTI_TENANT_SPEC.md)
+2. **Salon appearance** — per-salon brand colors, logo & font customization. Smaller and lower-risk than Stripe; exercises the new per-host rendering path before money flows through it. See [docs/STYLING_SPEC.md](docs/STYLING_SPEC.md)
+3. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
+4. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. Tier 1 items (iCal links, visit history, rebook, review requests, waitlist) are mostly independent; Packages depends on Stripe. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)
+
+Variations:
+- If revenue is urgent, swap Styling and Stripe — the dependency graph allows it.
+- If multi-tenant feels too big to start cold, cherry-pick one or two tenant-agnostic Tier 1 features first (review requests, iCal links). Avoid anything with new schema (Waitlist, Loyalty, Packages) until after multi-tenant.
