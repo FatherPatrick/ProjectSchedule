@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 import { CancelApptButton } from "./CancelApptButton";
 import { ApproveApptButton } from "./ApproveApptButton";
 import { ClearCancelledButton } from "./ClearCancelledButton";
@@ -9,6 +10,7 @@ import { CompleteApptButton } from "./CompleteApptButton";
 export const dynamic = "force-dynamic";
 
 export default async function AdminCalendar() {
+  const salonId = await getDefaultSalonId();
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -16,13 +18,14 @@ export default async function AdminCalendar() {
   const [appts, cancelledCount] = await Promise.all([
     prisma.appointment.findMany({
       where: {
+        salonId,
         startsAt: { gte: start, lte: end },
         status: { in: ["CONFIRMED", "CANCELLED", "PENDING"] },
       },
       orderBy: { startsAt: "asc" },
       include: { client: true, service: true },
     }),
-    prisma.appointment.count({ where: { status: "CANCELLED" } }),
+    prisma.appointment.count({ where: { salonId, status: "CANCELLED" } }),
   ]);
 
   const pending = appts.filter((a) => a.status === "PENDING");

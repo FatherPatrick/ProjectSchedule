@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
+  const salonId = await getDefaultSalonId();
   const clients = await prisma.client.findMany({
+    where: { salonId },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { appointments: true } },

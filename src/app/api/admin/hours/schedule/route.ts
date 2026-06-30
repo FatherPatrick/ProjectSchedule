@@ -3,19 +3,23 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { businessHoursScheduleJsonCreateSchema } from "@/lib/validation/adminJson";
 import { bizDateKey } from "@/lib/timezone";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import type { HoursOverride, HoursScheduleResponse } from "@/lib/api-types";
 
 /**
  * GET — list future overrides (`effectiveFrom > today`), grouped by date.
  */
 export const GET = withAdmin(async (req) => {
+  const salonId = await getAdminSalonId();
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
 
   const todayKey = bizDateKey(new Date());
   const todayMidnightUTC = new Date(`${todayKey}T00:00:00.000Z`);
   const rows = await prisma.businessHoursSchedule.findMany({
-    where: includePast ? {} : { effectiveFrom: { gt: todayMidnightUTC } },
+    where: includePast
+      ? { salonId }
+      : { salonId, effectiveFrom: { gt: todayMidnightUTC } },
     orderBy: [{ effectiveFrom: "asc" }, { dayOfWeek: "asc" }],
   });
 
@@ -46,6 +50,7 @@ export const GET = withAdmin(async (req) => {
 export const POST = withAdminJson(
   businessHoursScheduleJsonCreateSchema,
   async (data) => {
+    const salonId = await getAdminSalonId();
     const { effectiveFrom: dateStr, note, days } = data;
     if (dateStr <= bizDateKey(new Date())) {
       return NextResponse.json(
@@ -67,7 +72,11 @@ export const POST = withAdminJson(
       days.map((day) =>
         prisma.businessHoursSchedule.upsert({
           where: {
-            effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: day.dayOfWeek },
+            salonId_effectiveFrom_dayOfWeek: {
+              salonId,
+              effectiveFrom,
+              dayOfWeek: day.dayOfWeek,
+            },
           },
           update: {
             openMin: day.openMin,
@@ -76,6 +85,7 @@ export const POST = withAdminJson(
             note,
           },
           create: {
+            salonId,
             effectiveFrom,
             dayOfWeek: day.dayOfWeek,
             openMin: day.openMin,

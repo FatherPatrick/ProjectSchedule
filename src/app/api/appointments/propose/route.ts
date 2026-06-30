@@ -14,10 +14,16 @@ import {
   isBeyondBookingWindow,
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
+import { getSalonFromRequest } from "@/lib/domain/salon";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
+  const salon = await getSalonFromRequest(req);
+  if (!salon) {
+    return NextResponse.json({ error: "Salon not found." }, { status: 404 });
+  }
+
   const body = await parseJsonBody(req);
   if (!body.ok) return body.response;
   const raw = body.data;
@@ -46,7 +52,7 @@ export async function POST(req: Request) {
   const service = await prisma.service.findUnique({
     where: { id: data.serviceId },
   });
-  if (!service || !service.active) {
+  if (!service || !service.active || service.salonId !== salon.id) {
     return NextResponse.json({ error: "Service not found." }, { status: 404 });
   }
 
@@ -63,7 +69,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const settings = await getSettings();
+  const settings = await getSettings(salon.id);
   if (isBeyondBookingWindow(startsAt, settings.maxAdvanceDays)) {
     return NextResponse.json(
       { error: BEYOND_WINDOW_MESSAGE },
@@ -74,9 +80,10 @@ export async function POST(req: Request) {
     startsAt.getTime() + service.durationMinutes * 60_000
   );
 
-  // Don't let proposals overlap an existing CONFIRMED appointment.
+  // Don't let proposals overlap an existing CONFIRMED appointment for this salon.
   const conflict = await prisma.appointment.findFirst({
     where: {
+      salonId: salon.id,
       status: "CONFIRMED",
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
@@ -94,10 +101,11 @@ export async function POST(req: Request) {
   }
 
   const email = data.email?.trim().toLowerCase() ?? "";
-  const existingClientId = email ? await findClientIdByEmail(email) : null;
+  const existingClientId = email ? await findClientIdByEmail(salon.id, email) : null;
   const client = await prisma.client.upsert({
     where: { id: existingClientId ?? "__nope__" },
     create: {
+      salonId: salon.id,
       name: data.name,
       email,
       phone: data.phone,
@@ -113,6 +121,7 @@ export async function POST(req: Request) {
 
   const appointment = await prisma.appointment.create({
     data: {
+      salonId: salon.id,
       serviceId: service.id,
       clientId: client.id,
       startsAt,

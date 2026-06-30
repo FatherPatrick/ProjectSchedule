@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { adminAction } from "@/lib/admin/serverAction";
 import { parseServiceCreateForm } from "@/lib/validation/admin";
 import { formatDuration, formatPrice } from "@/lib/utils";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
 import { TextInput } from "@/components/TextInput";
@@ -13,8 +14,9 @@ export const dynamic = "force-dynamic";
 async function createService(formData: FormData) {
   "use server";
   await adminAction("/admin/services", "created", async () => {
+    const salonId = await getAdminSalonId();
     const data = parseServiceCreateForm(formData);
-    await prisma.service.create({ data });
+    await prisma.service.create({ data: { ...data, salonId } });
   });
 }
 
@@ -33,7 +35,9 @@ async function deleteService(id: string) {
 }
 
 export default async function ServicesAdmin() {
+  const salonId = await getAdminSalonId();
   const services = await prisma.service.findMany({
+    where: { salonId },
     orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
 

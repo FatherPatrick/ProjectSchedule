@@ -9,6 +9,7 @@ import { reportError } from "@/lib/observability/reportError";
 import { toE164 } from "@/lib/phone";
 import { formatBiz } from "@/lib/timezone";
 import { adminAppointmentCreateSchema } from "@/lib/validation/appointments";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import type { AppointmentsListResponse } from "@/lib/api-types";
 
 /**
@@ -30,6 +31,8 @@ const MAX_ROWS = 500;
 const DEFAULT_RANGE_DAYS = 30;
 
 export const GET = withAdmin(async (req) => {
+  const salonId = await getAdminSalonId();
+
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({
     from: url.searchParams.get("from") ?? undefined,
@@ -61,6 +64,7 @@ export const GET = withAdmin(async (req) => {
 
   const rows = await prisma.appointment.findMany({
     where: {
+      salonId,
       startsAt: { gte: from, lt: to },
       ...(parsed.data.status ? { status: parsed.data.status } : {}),
     },
@@ -101,6 +105,8 @@ export const GET = withAdmin(async (req) => {
 export const POST = withAdminJson(
   adminAppointmentCreateSchema,
   async (data) => {
+    const salonId = await getAdminSalonId();
+
     const service = await prisma.service.findUnique({
       where: { id: data.serviceId },
     });
@@ -129,6 +135,7 @@ export const POST = withAdminJson(
 
     const conflict = await prisma.appointment.findFirst({
       where: {
+        salonId,
         status: "CONFIRMED",
         startsAt: { lt: endsAt },
         endsAt: { gt: startsAt },
@@ -166,10 +173,11 @@ export const POST = withAdminJson(
       // the public flow); when absent we store "" — the Client.email column is
       // non-null, and notifications already skip email sends for a blank address.
       const email = data.email?.trim().toLowerCase() ?? "";
-      const existingId = email ? await findClientIdByEmail(email) : null;
+      const existingId = email ? await findClientIdByEmail(salonId, email) : null;
       const client = await prisma.client.upsert({
         where: { id: existingId ?? "__nope__" },
         create: {
+          salonId,
           name: data.name!,
           email,
           phone: e164,
@@ -183,6 +191,7 @@ export const POST = withAdminJson(
 
     const appointment = await prisma.appointment.create({
       data: {
+        salonId,
         serviceId: service.id,
         clientId,
         startsAt,

@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/db/prisma";
 import { Alert } from "@/components/Alert";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 import { AdminBookingForm } from "./AdminBookingForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminBookPage() {
+  const salonId = await getDefaultSalonId();
   const services = await prisma.service.findMany({
-    where: { active: true },
+    where: { salonId, active: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: { id: true, name: true, durationMinutes: true, priceCents: true },
   });

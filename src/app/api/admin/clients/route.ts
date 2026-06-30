@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin } from "@/lib/http/withAdmin";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import type { ClientSearchResponse } from "@/lib/api-types";
 
 /**
@@ -11,6 +12,7 @@ import type { ClientSearchResponse } from "@/lib/api-types";
 const MAX_ROWS = 10;
 
 export const GET = withAdmin(async (req) => {
+  const salonId = await getAdminSalonId();
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
   if (q.length < 1) {
     return NextResponse.json({ data: [] } satisfies ClientSearchResponse);
@@ -18,6 +20,7 @@ export const GET = withAdmin(async (req) => {
 
   const rows = await prisma.client.findMany({
     where: {
+      salonId,
       OR: [
         { name: { contains: q, mode: "insensitive" } },
         { email: { contains: q, mode: "insensitive" } },

@@ -66,6 +66,7 @@ async function runApproveTxnWithRetry(
 
           const conflict = await tx.appointment.findFirst({
             where: {
+              salonId: appt.salonId,
               id: { not: appt.id },
               status: "CONFIRMED",
               startsAt: { lt: appt.endsAt },

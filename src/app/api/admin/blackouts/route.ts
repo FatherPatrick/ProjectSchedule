@@ -4,13 +4,15 @@ import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { bizWallClockToUTC } from "@/lib/timezone";
 import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import type { BlackoutsListResponse } from "@/lib/api-types";
 
 export const GET = withAdmin(async (req) => {
+  const salonId = await getAdminSalonId();
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
   const rows = await prisma.blackout.findMany({
-    where: includePast ? {} : { endsAt: { gte: new Date() } },
+    where: includePast ? { salonId } : { salonId, endsAt: { gte: new Date() } },
     orderBy: { startsAt: "asc" },
   });
   return NextResponse.json({
@@ -24,6 +26,7 @@ export const GET = withAdmin(async (req) => {
 });
 
 export const POST = withAdminJson(blackoutCreateSchema, async (data) => {
+  const salonId = await getAdminSalonId();
   const { fromDay, toDay, allDay, startTime, endTime, reason } = data;
 
   let startsAt: Date;
@@ -59,7 +62,7 @@ export const POST = withAdminJson(blackoutCreateSchema, async (data) => {
   }
 
   const created = await prisma.blackout.create({
-    data: { startsAt, endsAt, reason },
+    data: { salonId, startsAt, endsAt, reason },
   });
   return NextResponse.json({ id: created.id });
 });

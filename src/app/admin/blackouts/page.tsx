@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
 import { BUSINESS_TIMEZONE } from "@/lib/config";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 import { BlackoutPicker, DeleteBlackoutButton } from "./BlackoutPicker";
 
 export const dynamic = "force-dynamic";
 
 export default async function BlackoutsAdmin() {
+  const salonId = await getDefaultSalonId();
   const blackouts = await prisma.blackout.findMany({
-    where: { endsAt: { gte: new Date() } },
+    where: { salonId, endsAt: { gte: new Date() } },
     orderBy: { startsAt: "asc" },
   });
 

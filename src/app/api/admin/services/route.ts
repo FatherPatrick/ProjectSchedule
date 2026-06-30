@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import { serviceJsonCreateSchema } from "@/lib/validation/adminJson";
 import type {
   ServiceCreateResponse,
@@ -9,11 +9,12 @@ import type {
 } from "@/lib/api-types";
 
 export const GET = withAdmin(async (req) => {
+  const salonId = await getAdminSalonId();
   const url = new URL(req.url);
   const includeInactive = url.searchParams.get("includeInactive") !== "false";
 
   const rows = await prisma.service.findMany({
-    where: includeInactive ? {} : { active: true },
+    where: includeInactive ? { salonId } : { salonId, active: true },
     orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
   return NextResponse.json({
@@ -30,12 +31,15 @@ export const GET = withAdmin(async (req) => {
 });
 
 export const POST = withAdminJson(serviceJsonCreateSchema, async (input) => {
+  const salonId = await getAdminSalonId();
   const { sortOrder, ...rest } = input;
-  const data: Prisma.ServiceCreateInput = {
-    ...rest,
-    sortOrder: sortOrder ?? 0,
-  };
-  const created = await prisma.service.create({ data });
+  const created = await prisma.service.create({
+    data: {
+      salonId,
+      ...rest,
+      sortOrder: sortOrder ?? 0,
+    },
+  });
   return NextResponse.json(
     { data: { id: created.id } } satisfies ServiceCreateResponse,
     { status: 201 }

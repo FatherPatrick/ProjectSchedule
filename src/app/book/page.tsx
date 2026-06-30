@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 import { Alert } from "@/components/Alert";
 import { BookingForm } from "./BookingForm";
 
@@ -11,13 +12,14 @@ export default async function BookPage({
   searchParams: Promise<{ serviceId?: string }>;
 }) {
   const { serviceId: initialServiceId } = await searchParams;
+  const salonId = await getDefaultSalonId();
   const [services, hours, settings] = await Promise.all([
     prisma.service.findMany({
-      where: { active: true },
+      where: { salonId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
-    prisma.businessHours.findMany(),
-    getSettings(),
+    prisma.businessHours.findMany({ where: { salonId } }),
+    getSettings(salonId),
   ]);
 
   const openDays = new Set(

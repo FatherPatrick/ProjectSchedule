@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { adminAction } from "@/lib/admin/serverAction";
 import { getSettings, updateSettings } from "@/lib/domain/settings";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import { hhmmToMinutes, minutesToHhmm } from "@/lib/domain/dates";
 import {
   ALLOWED_GRANULARITIES,
@@ -47,18 +48,20 @@ const MAX_ADVANCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 async function saveHours(formData: FormData) {
   "use server";
   await adminAction("/admin/hours", "hours", async () => {
+    const salonId = await getAdminSalonId();
     const { granularity, maxAdvanceDays, days } =
       parseBusinessHoursSaveForm(formData);
     await prisma.$transaction([
       ...days.map((day, d) =>
         prisma.businessHours.upsert({
-          where: { dayOfWeek: d },
+          where: { salonId_dayOfWeek: { salonId, dayOfWeek: d } },
           update: {
             active: day.active,
             openMin: hhmmToMinutes(day.open),
             closeMin: hhmmToMinutes(day.close),
           },
           create: {
+            salonId,
             dayOfWeek: d,
             active: day.active,
             openMin: hhmmToMinutes(day.open),
@@ -67,13 +70,14 @@ async function saveHours(formData: FormData) {
         })
       ),
     ]);
-    await updateSettings({ slotGranularityMin: granularity, maxAdvanceDays });
+    await updateSettings(salonId, { slotGranularityMin: granularity, maxAdvanceDays });
   });
 }
 
 async function addScheduledChange(formData: FormData) {
   "use server";
   await adminAction("/admin/hours", "schedule", async () => {
+    const salonId = await getAdminSalonId();
     const { effectiveFrom: dateStr, note, days } =
       parseScheduledChangeCreateForm(formData);
     const today = bizDateKey(new Date());
@@ -86,7 +90,7 @@ async function addScheduledChange(formData: FormData) {
       days.map((day, d) =>
         prisma.businessHoursSchedule.upsert({
           where: {
-            effectiveFrom_dayOfWeek: { effectiveFrom, dayOfWeek: d },
+            salonId_effectiveFrom_dayOfWeek: { salonId, effectiveFrom, dayOfWeek: d },
           },
           update: {
             openMin: hhmmToMinutes(day.open),
@@ -95,6 +99,7 @@ async function addScheduledChange(formData: FormData) {
             note,
           },
           create: {
+            salonId,
             effectiveFrom,
             dayOfWeek: d,
             openMin: hhmmToMinutes(day.open),
@@ -111,21 +116,25 @@ async function addScheduledChange(formData: FormData) {
 async function deleteScheduledChange(formData: FormData) {
   "use server";
   await adminAction("/admin/hours", "deleted", async () => {
+    const salonId = await getAdminSalonId();
     const { effectiveFrom: dateStr } = parseScheduledChangeDeleteForm(formData);
     const effectiveFrom = new Date(`${dateStr}T00:00:00.000Z`);
-    await prisma.businessHoursSchedule.deleteMany({ where: { effectiveFrom } });
+    await prisma.businessHoursSchedule.deleteMany({
+      where: { salonId, effectiveFrom },
+    });
   });
 }
 
 async function saveNotificationSettings(formData: FormData) {
   "use server";
   await adminAction("/admin/hours", "notifications", async () => {
+    const salonId = await getAdminSalonId();
     const enabled = formData.get("reviewRequestEnabled") === "on";
     const url = (formData.get("reviewRequestUrl") as string | null)?.trim() || null;
     if (url && !/^https?:\/\/.+/.test(url)) {
       throw new Error("Review link must be a valid URL starting with http:// or https://");
     }
-    await updateSettings({ reviewRequestEnabled: enabled, reviewRequestUrl: url });
+    await updateSettings(salonId, { reviewRequestEnabled: enabled, reviewRequestUrl: url });
   });
 }
 
@@ -137,13 +146,14 @@ export default async function HoursAdmin({
   // searchParams is awaited just to keep this page dynamic; the AdminToaster
   // in the layout reads `?saved=...` and shows the confirmation toast.
   await searchParams;
+  const salonId = await getAdminSalonId();
   const todayKey = bizDateKey(new Date());
   const todayMidnightUTC = new Date(`${todayKey}T00:00:00.000Z`);
   const [rows, settings, scheduleRows] = await Promise.all([
-    prisma.businessHours.findMany(),
-    getSettings(),
+    prisma.businessHours.findMany({ where: { salonId } }),
+    getSettings(salonId),
     prisma.businessHoursSchedule.findMany({
-      where: { effectiveFrom: { gt: todayMidnightUTC } },
+      where: { salonId, effectiveFrom: { gt: todayMidnightUTC } },
       orderBy: [{ effectiveFrom: "asc" }, { dayOfWeek: "asc" }],
     }),
   ]);

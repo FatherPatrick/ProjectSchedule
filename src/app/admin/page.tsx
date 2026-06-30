@@ -1,22 +1,25 @@
 import { prisma } from "@/lib/db/prisma";
 import { formatBiz } from "@/lib/timezone";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
+  const salonId = await getDefaultSalonId();
+
   const [upcoming, totalUpcoming, totalServices, totalBlackouts] =
     await Promise.all([
       prisma.appointment.findMany({
-        where: { status: "CONFIRMED", startsAt: { gte: new Date() } },
+        where: { salonId, status: "CONFIRMED", startsAt: { gte: new Date() } },
         orderBy: { startsAt: "asc" },
         take: 8,
         include: { client: true, service: true },
       }),
       prisma.appointment.count({
-        where: { status: "CONFIRMED", startsAt: { gte: new Date() } },
+        where: { salonId, status: "CONFIRMED", startsAt: { gte: new Date() } },
       }),
-      prisma.service.count({ where: { active: true } }),
-      prisma.blackout.count({ where: { endsAt: { gte: new Date() } } }),
+      prisma.service.count({ where: { salonId, active: true } }),
+      prisma.blackout.count({ where: { salonId, endsAt: { gte: new Date() } } }),
     ]);
 
   return (

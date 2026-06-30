@@ -19,6 +19,7 @@ import {
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
 import { notifyAdminsOfBooking } from "@/lib/integrations/adminSms";
+import { getSalonFromRequest } from "@/lib/domain/salon";
 
 // First-pass anti-abuse for the public booking endpoint. A captcha
 // (Turnstile / hCaptcha) is the long-term answer — see README TODO.
@@ -26,6 +27,11 @@ const BOOKING_IP_LIMIT = 5;
 const BOOKING_WINDOW_MS = 10 * 60_000;
 
 export async function POST(req: Request) {
+  const salon = await getSalonFromRequest(req);
+  if (!salon) {
+    return NextResponse.json({ error: "Salon not found." }, { status: 404 });
+  }
+
   const ip = getClientIp(req);
   const ipCheck = checkRateLimit({
     bucket: "appointments:create:ip",
@@ -69,7 +75,7 @@ export async function POST(req: Request) {
   const service = await prisma.service.findUnique({
     where: { id: data.serviceId },
   });
-  if (!service || !service.active) {
+  if (!service || !service.active || service.salonId !== salon.id) {
     return NextResponse.json({ error: "Service not found." }, { status: 404 });
   }
 
@@ -80,7 +86,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const settings = await getSettings();
+  const settings = await getSettings(salon.id);
   if (isBeyondBookingWindow(startsAt, settings.maxAdvanceDays)) {
     return NextResponse.json(
       { error: BEYOND_WINDOW_MESSAGE },
@@ -91,9 +97,10 @@ export async function POST(req: Request) {
     startsAt.getTime() + service.durationMinutes * 60_000
   );
 
-  // Race-safe overlap check.
+  // Race-safe overlap check scoped to this salon.
   const conflict = await prisma.appointment.findFirst({
     where: {
+      salonId: salon.id,
       status: "CONFIRMED",
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
@@ -110,10 +117,11 @@ export async function POST(req: Request) {
   // Look up or create client. Email is optional; when present we dedupe by it
   // and enable email notifications, otherwise we store "" and go SMS-only.
   const email = data.email?.trim().toLowerCase() ?? "";
-  const existingId = email ? await findClientIdByEmail(email) : null;
+  const existingId = email ? await findClientIdByEmail(salon.id, email) : null;
   const client = await prisma.client.upsert({
     where: { id: existingId ?? "__nope__" },
     create: {
+      salonId: salon.id,
       name: data.name,
       email,
       phone: data.phone,
@@ -129,6 +137,7 @@ export async function POST(req: Request) {
 
   const appointment = await prisma.appointment.create({
     data: {
+      salonId: salon.id,
       serviceId: service.id,
       clientId: client.id,
       startsAt,

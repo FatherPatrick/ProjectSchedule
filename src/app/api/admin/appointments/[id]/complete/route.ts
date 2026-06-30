@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/http/withAdmin";
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
+import { getAdminSalonId } from "@/lib/domain/salon";
 import { sendReviewRequest } from "@/lib/integrations/notifications";
 
 export const POST = withAdmin(
   async (_req, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
+    const salonId = await getAdminSalonId();
 
     const appt = await prisma.appointment.findUnique({ where: { id } });
     if (!appt) {
@@ -24,7 +26,7 @@ export const POST = withAdmin(
       data: { status: "COMPLETED" },
     });
 
-    const settings = await getSettings();
+    const settings = await getSettings(salonId);
     if (settings.reviewRequestEnabled && settings.reviewRequestUrl) {
       sendReviewRequest(id, settings.reviewRequestUrl).catch(() => {});
     }

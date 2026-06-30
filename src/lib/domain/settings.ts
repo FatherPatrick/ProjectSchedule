@@ -22,12 +22,14 @@ export interface AppSettings {
   reviewRequestUrl: string | null;
 }
 
-export async function getSettings(): Promise<AppSettings> {
+export async function getSettings(salonId: string): Promise<AppSettings> {
   const row = await prisma.setting.upsert({
-    where: { id: "default" },
+    where: { salonId },
     update: {},
     create: {
-      id: "default",
+      // Use salonId as the Setting id — unique and stable per salon.
+      id: salonId,
+      salonId,
       slotGranularityMin: DEFAULT_GRANULARITY,
       maxAdvanceDays: DEFAULT_MAX_ADVANCE_DAYS,
     },
@@ -59,12 +61,16 @@ export function isBeyondBookingWindow(
   return startsAt.getTime() - nowMs > maxAdvanceDays * 86_400_000;
 }
 
-export async function updateSettings(patch: Partial<AppSettings>) {
+export async function updateSettings(
+  salonId: string,
+  patch: Partial<AppSettings>
+) {
   return prisma.setting.upsert({
-    where: { id: "default" },
+    where: { salonId },
     update: patch,
     create: {
-      id: "default",
+      id: salonId,
+      salonId,
       slotGranularityMin: DEFAULT_GRANULARITY,
       maxAdvanceDays: DEFAULT_MAX_ADVANCE_DAYS,
       ...patch,

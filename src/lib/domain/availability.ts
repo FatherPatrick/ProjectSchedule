@@ -27,14 +27,15 @@ function dateKeyToEffectiveFrom(dateKey: string): Date {
  *  Returns null if the day is closed or unconfigured.
  */
 export async function getEffectiveHoursForDate(opts: {
+  salonId: string;
   dateKey: string;
   dayOfWeek: number;
 }): Promise<{ openMin: number; closeMin: number; active: boolean } | null> {
-  const { dateKey, dayOfWeek } = opts;
+  const { salonId, dateKey, dayOfWeek } = opts;
   const cutoff = dateKeyToEffectiveFrom(dateKey);
 
   const override = await prisma.businessHoursSchedule.findFirst({
-    where: { dayOfWeek, effectiveFrom: { lte: cutoff } },
+    where: { salonId, dayOfWeek, effectiveFrom: { lte: cutoff } },
     orderBy: { effectiveFrom: "desc" },
   });
   if (override) {
@@ -44,8 +45,11 @@ export async function getEffectiveHoursForDate(opts: {
       active: override.active,
     };
   }
+
+  // BusinessHours.dayOfWeek is no longer globally unique after Phase 1c —
+  // the unique constraint is now @@unique([salonId, dayOfWeek]).
   const base = await prisma.businessHours.findUnique({
-    where: { dayOfWeek },
+    where: { salonId_dayOfWeek: { salonId, dayOfWeek } },
   });
   if (!base) return null;
   return {
@@ -61,31 +65,34 @@ export async function getEffectiveHoursForDate(opts: {
  * appointments and admin blackout ranges.
  */
 export async function getAvailableSlots(opts: {
+  salonId: string;
   serviceId: string;
   /** YYYY-MM-DD in business timezone. */
   dateKey: string;
 }): Promise<Slot[]> {
-  const { serviceId, dateKey } = opts;
+  const { salonId, serviceId, dateKey } = opts;
 
   const [service, settings] = await Promise.all([
     prisma.service.findUnique({ where: { id: serviceId } }),
-    getSettings(),
+    getSettings(salonId),
   ]);
   if (!service || !service.active) return [];
 
   // Determine the day's business hours.
   const dateMidUTC = bizWallClockToUTC(dateKey, 12 * 60); // noon to avoid DST edges
   const dow = bizDayOfWeek(dateMidUTC);
-  const hours = await getEffectiveHoursForDate({ dateKey, dayOfWeek: dow });
+  const hours = await getEffectiveHoursForDate({ salonId, dateKey, dayOfWeek: dow });
   if (!hours || !hours.active || hours.openMin >= hours.closeMin) return [];
 
   const dayStart = bizWallClockToUTC(dateKey, 0);
   const dayEnd = bizWallClockToUTC(dateKey, 24 * 60);
 
-  // Pull existing confirmed appointments and blackouts overlapping this day.
+  // Pull existing confirmed appointments and blackouts overlapping this day,
+  // scoped to this salon so cross-tenant data never blocks slots.
   const [appts, blackouts] = await Promise.all([
     prisma.appointment.findMany({
       where: {
+        salonId,
         status: "CONFIRMED",
         startsAt: { lt: dayEnd },
         endsAt: { gt: dayStart },
@@ -94,6 +101,7 @@ export async function getAvailableSlots(opts: {
     }),
     prisma.blackout.findMany({
       where: {
+        salonId,
         startsAt: { lt: dayEnd },
         endsAt: { gt: dayStart },
       },

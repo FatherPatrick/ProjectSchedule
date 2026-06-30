@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { BUSINESS_NAME } from "@/lib/config";
 import { formatDuration, formatPrice } from "@/lib/utils";
+import { getDefaultSalonId } from "@/lib/domain/salon";
 import { ButtonLink } from "@/components/ButtonLink";
 
 export const dynamic = "force-dynamic";
@@ -8,8 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   let services: Awaited<ReturnType<typeof prisma.service.findMany>> = [];
   try {
+    const salonId = await getDefaultSalonId();
     services = await prisma.service.findMany({
-      where: { active: true },
+      where: { salonId, active: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
   } catch {
