@@ -184,7 +184,7 @@ export function UnsavedChangesGuard({
           if (e.target === e.currentTarget) cancelLeave();
         }}
       >
-        <div className="w-full max-w-md rounded-2xl border border-pink-200 bg-white p-5 shadow-2xl">
+        <div className="w-full max-w-md rounded-2xl border border-brand-soft bg-white p-5 shadow-2xl">
           <h2
             id="unsaved-title"
             className="text-lg font-semibold text-neutral-900"
@@ -203,7 +203,7 @@ export function UnsavedChangesGuard({
             <button
               type="button"
               onClick={confirmLeave}
-              className="rounded-full bg-gradient-to-r from-rose-500 to-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:from-rose-600 hover:to-pink-700"
+              className="rounded-full bg-gradient-to-r from-brand-hover to-brand px-4 py-2 text-sm font-semibold text-brand-contrast shadow-sm hover:brightness-95"
             >
               Discard changes
             </button>

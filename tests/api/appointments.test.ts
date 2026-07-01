@@ -14,7 +14,11 @@ import {
   vi,
 } from "vitest";
 
+const SALON_ID = "salon_1";
+const SALON_SLUG = "test-salon";
+
 const prismaMock = vi.hoisted(() => ({
+  salon: { findUnique: vi.fn() },
   service: { findUnique: vi.fn() },
   appointment: { findFirst: vi.fn(), create: vi.fn() },
   client: { upsert: vi.fn() },
@@ -42,6 +46,7 @@ function postJson(body: unknown, headers?: Record<string, string>): Request {
     headers: {
       "content-type": "application/json",
       "x-forwarded-for": "203.0.113.7",
+      "x-salon-slug": SALON_SLUG,
       ...headers,
     },
     body: typeof body === "string" ? body : JSON.stringify(body),
@@ -63,6 +68,19 @@ beforeEach(() => {
   _resetRateLimitStoreForTests();
   _resetCaptchaDedupeForTests();
   delete process.env.TURNSTILE_SECRET_KEY;
+  prismaMock.salon.findUnique.mockReset().mockResolvedValue({
+    id: SALON_ID,
+    slug: SALON_SLUG,
+    name: "Test Salon",
+    timezone: "America/Los_Angeles",
+    instagram: null,
+    brandColor: "#db2777",
+    accentColor: "#db2777",
+    backgroundColor: "#fdf2f8",
+    fontKey: "geist",
+    logoUrl: null,
+    status: "ACTIVE",
+  });
   prismaMock.service.findUnique.mockReset();
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
   prismaMock.appointment.create.mockReset();
@@ -86,6 +104,7 @@ afterEach(() => {
 function mockServiceOk() {
   prismaMock.service.findUnique.mockResolvedValue({
     id: "svc_1",
+    salonId: SALON_ID,
     name: "Manicure",
     durationMinutes: 60,
     active: true,

@@ -249,10 +249,10 @@ export function PrettySelect<V extends string | number>({
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={onTriggerKeyDown}
         className={cn(
-          "inline-flex w-full items-center justify-between gap-2 rounded-xl border border-pink-300 bg-gradient-to-b from-white to-pink-50/60 px-3.5 py-2 text-left text-sm text-neutral-800 shadow-sm transition",
-          "hover:border-pink-400 hover:from-white hover:to-pink-100",
-          "focus:outline-none focus-visible:border-pink-600 focus-visible:ring-2 focus-visible:ring-pink-300/60",
-          open && "border-pink-600 ring-2 ring-pink-300/60",
+          "inline-flex w-full items-center justify-between gap-2 rounded-xl border border-brand-soft bg-gradient-to-b from-white to-brand-soft/60 px-3.5 py-2 text-left text-sm text-neutral-800 shadow-sm transition",
+          "hover:border-brand/40 hover:from-white hover:to-brand-soft",
+          "focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand-soft",
+          open && "border-brand ring-2 ring-brand-soft",
           disabled && "cursor-not-allowed opacity-60",
           triggerClassName
         )}
@@ -268,7 +268,7 @@ export function PrettySelect<V extends string | number>({
         <ChevronDown
           aria-hidden
           className={cn(
-            "h-4 w-4 text-pink-600 transition-transform",
+            "h-4 w-4 text-brand transition-transform",
             open && "rotate-180"
           )}
         />
@@ -292,7 +292,7 @@ export function PrettySelect<V extends string | number>({
                 left: menuStyle.left,
                 minWidth: menuStyle.width,
               }}
-              className="z-50 max-h-72 overflow-auto rounded-2xl border border-pink-200 bg-white/95 p-1 shadow-xl shadow-pink-200/40 backdrop-blur focus:outline-none"
+              className="z-50 max-h-72 overflow-auto rounded-2xl border border-brand-soft bg-white/95 p-1 shadow-xl shadow-brand/20 backdrop-blur focus:outline-none"
             >
               {options.map((opt, i) => {
                 const isSelected = opt.value === current;
@@ -312,9 +312,9 @@ export function PrettySelect<V extends string | number>({
                     className={cn(
                       "flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
                       isActive
-                        ? "bg-gradient-to-r from-pink-100 to-rose-100 text-pink-900"
+                        ? "bg-brand-soft text-brand"
                         : "text-neutral-800",
-                      isSelected && !isActive && "bg-pink-50 text-pink-900"
+                      isSelected && !isActive && "bg-brand-soft text-brand"
                     )}
                   >
                     <span
@@ -323,7 +323,7 @@ export function PrettySelect<V extends string | number>({
                       )}
                     >
                       {isSelected ? (
-                        <Check className="h-4 w-4 text-pink-600" />
+                        <Check className="h-4 w-4 text-brand" />
                       ) : null}
                     </span>
                     <span className="flex-1">

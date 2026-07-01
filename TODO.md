@@ -35,23 +35,8 @@
 
 ### Spec rollout order
 
-Multi-tenant is a prerequisite for the other three specs — each one adds
-`salonId`-shaped schema (themes on `Salon`, Stripe Connect accounts per
-salon, tenant-scoped feature settings) that would need a second migration
-pass if built first.
-
-1. **Multi-tenant** — support multiple salons, each with their own admins/clients. See [docs/MULTI_TENANT_SPEC.md](docs/MULTI_TENANT_SPEC.md)
-   - ✅ Phase 1: Schema migration (`Salon` model, `salonId` on all tenant tables, migrations applied, backfill run)
-   - ✅ Phase 2: Query scoping (`salon.ts` tenant context, `getAdminSalonId`/`getSalonFromRequest`, all routes + pages scoped to salonId)
-   - ✅ Phase 3: Tenant resolution (proxy.ts Host header → x-salon-slug → getSalonBySlug, 5-min TTL cache)
-   - ✅ Phase 4: Per-salon auth (session.salonId, host-scoped OTP, AdminPhone PK)
-   - ✅ Phase 5: Parameterize notifications by salon
-   - ✅ Phase 6: Self-serve signup flow
-   - ✅ Phase 7: Hardening (isolation tests, suspended-salon UX)
-2. **Salon appearance** — per-salon brand colors, logo & font customization. Smaller and lower-risk than Stripe; exercises the new per-host rendering path before money flows through it. See [docs/STYLING_SPEC.md](docs/STYLING_SPEC.md)
-3. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
-4. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. Tier 1 items (iCal links, visit history, rebook, review requests, waitlist) are mostly independent; Packages depends on Stripe. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)
+1. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
+2. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. Tier 1 items (iCal links, visit history, rebook, review requests, waitlist) are mostly independent; Packages depends on Stripe. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)
 
 Variations:
-- If revenue is urgent, swap Styling and Stripe — the dependency graph allows it.
-- If multi-tenant feels too big to start cold, cherry-pick one or two tenant-agnostic Tier 1 features first (review requests, iCal links). Avoid anything with new schema (Waitlist, Loyalty, Packages) until after multi-tenant.
+- Tier 1 feature-roadmap items with no new schema (review requests, iCal links) can be cherry-picked ahead of Stripe if useful sooner. Avoid anything with new schema (Waitlist, Loyalty, Packages) until after Stripe.

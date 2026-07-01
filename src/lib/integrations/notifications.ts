@@ -3,6 +3,7 @@ import { sendEmail } from "./email";
 import { sendSMS, withSmsFooter } from "./sms";
 import { formatBiz } from "../timezone";
 import { salonAppUrl } from "../config";
+import { contrastTextColor, isValidHex } from "../theme/color";
 import type {
   Appointment,
   Client,
@@ -11,8 +12,34 @@ import type {
   NotificationKind,
 } from "@prisma/client";
 
-type SalonFields = Pick<Salon, "name" | "instagram" | "slug" | "timezone">;
+type SalonFields = Pick<
+  Salon,
+  "name" | "instagram" | "slug" | "timezone" | "brandColor" | "logoUrl"
+>;
 type Bundle = Appointment & { client: Client; service: Service; salon: SalonFields };
+
+const PLATFORM_DEFAULT_BRAND = "#db2777";
+
+/** Validated brand color for email inlining — falls back to the platform default. */
+function emailBrandColor(salon: SalonFields): string {
+  return isValidHex(salon.brandColor) ? salon.brandColor : PLATFORM_DEFAULT_BRAND;
+}
+
+/** Email clients strip external stylesheets and most <style> blocks, so branding is inlined per-element. */
+function logoBlockHtml(salon: SalonFields): string {
+  if (!salon.logoUrl) return "";
+  return `<p style="margin:0 0 16px;"><img src="${salon.logoUrl}" alt="${escapeHtml(salon.name)}" style="max-height:48px;height:48px;width:auto;" /></p>`;
+}
+
+function brandLinkStyle(salon: SalonFields): string {
+  return `color:${emailBrandColor(salon)};`;
+}
+
+/** Pill-button style for the primary CTA link — contrast-checked so light brand colors don't produce unreadable button text. */
+function brandButtonStyle(salon: SalonFields): string {
+  const brand = emailBrandColor(salon);
+  return `display:inline-block;background:${brand};color:${contrastTextColor(brand)};padding:10px 18px;border-radius:9999px;text-decoration:none;font-weight:600;`;
+}
 
 function manageUrl(slug: string, token: string) {
   return `${salonAppUrl(slug)}/appointments/${token}`;
@@ -87,13 +114,16 @@ function buildClientMessage(b: Bundle, lead: string) {
   ];
   const text = textParas.join("\n\n");
 
+  const linkStyle = brandLinkStyle(b.salon);
   const html =
+    logoBlockHtml(b.salon) +
     [greeting, lead, ...body].map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
     `<p>` +
-    `<a href="${gcalUrl}">Add to Google Calendar</a> &nbsp;|&nbsp; ` +
-    `<a href="${icalUrl}">Download calendar file (.ics)</a>` +
+    `<a href="${gcalUrl}" style="${linkStyle}">Add to Google Calendar</a> &nbsp;|&nbsp; ` +
+    `<a href="${icalUrl}" style="${linkStyle}">Download calendar file (.ics)</a>` +
     `</p>` +
-    `<p><a href="${url}">Manage or cancel your appointment</a> &nbsp;|&nbsp; <a href="${reUrl}">Book again</a></p>` +
+    `<p><a href="${url}" style="${linkStyle}">Manage or cancel your appointment</a></p>` +
+    `<p><a href="${reUrl}" style="${brandButtonStyle(b.salon)}">Book again</a></p>` +
     signoff.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
 
   // SMS carries a shorter version without the calendar links to stay concise.
@@ -145,11 +175,14 @@ function reviewRequestCopy(b: Bundle, reviewUrl: string) {
     b.salon.name,
   ].join("\n\n");
 
+  const linkStyle = brandLinkStyle(b.salon);
   const html =
+    logoBlockHtml(b.salon) +
     `<p>Hi ${escapeHtml(b.client.name)}!</p>` +
     `<p>Thank you so much for your <strong>${escapeHtml(b.service.name)}</strong> appointment on ${escapeHtml(when)}. We hope you love your nails!</p>` +
-    `<p>If you have a moment, we'd love it if you left us a review — it helps us so much: <a href="${reviewUrl}">Leave a review</a></p>` +
-    `<p>We'd love to see you again soon. <a href="${reUrl}">Book your next appointment</a></p>` +
+    `<p>If you have a moment, we'd love it if you left us a review — it helps us so much:</p>` +
+    `<p><a href="${reviewUrl}" style="${brandButtonStyle(b.salon)}">Leave a review</a></p>` +
+    `<p>We'd love to see you again soon. <a href="${reUrl}" style="${linkStyle}">Book your next appointment</a></p>` +
     `<p>Xoxo💋<br/>${escapeHtml(b.salon.name)}</p>`;
 
   const sms =
@@ -180,7 +213,7 @@ function cancellationCopy(b: Bundle, note?: string) {
   return {
     subject: `Cancelled: ${b.service.name} on ${when}`,
     text: `Your ${b.service.name} appointment ${when} has been cancelled.${noteBlockText}`,
-    html: `<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
+    html: `${logoBlockHtml(b.salon)}<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
     sms: `${b.salon.name}: your ${b.service.name} appointment ${when} has been cancelled.${noteBlockSms}`,
   };
 }
@@ -190,6 +223,8 @@ const SALON_SELECT = {
   instagram: true,
   slug: true,
   timezone: true,
+  brandColor: true,
+  logoUrl: true,
 } as const;
 
 /**

@@ -18,6 +18,7 @@ vi.mock("@/lib/domain/settings", () => ({
 import { getAvailableSlots } from "@/lib/domain/availability";
 
 const SERVICE_ID = "svc_1";
+const SALON_ID = "salon_1";
 
 function setupOpenDay(durationMinutes = 60) {
   prismaMock.service.findUnique.mockResolvedValue({
@@ -47,6 +48,7 @@ describe("getAvailableSlots", () => {
   it("returns no slots when service is missing", async () => {
     prismaMock.service.findUnique.mockResolvedValue(null);
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -60,6 +62,7 @@ describe("getAvailableSlots", () => {
       durationMinutes: 60,
     });
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -75,6 +78,7 @@ describe("getAvailableSlots", () => {
       active: false,
     });
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -84,6 +88,7 @@ describe("getAvailableSlots", () => {
   it("generates slots at the configured granularity, ending at lastStart", async () => {
     setupOpenDay(60); // 60-min service, hours 9-17, 30-min granularity
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -103,6 +108,7 @@ describe("getAvailableSlots", () => {
       },
     ]);
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -124,6 +130,7 @@ describe("getAvailableSlots", () => {
       },
     ]);
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -138,6 +145,7 @@ describe("getAvailableSlots", () => {
     // Set "now" to 2026-07-15 11:00 PDT (18:00 UTC)
     vi.setSystemTime(new Date("2026-07-15T18:00:00.000Z"));
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });
@@ -169,6 +177,7 @@ describe("getAvailableSlots", () => {
     prismaMock.appointment.findMany.mockResolvedValue([]);
     prismaMock.blackout.findMany.mockResolvedValue([]);
     const slots = await getAvailableSlots({
+      salonId: SALON_ID,
       serviceId: SERVICE_ID,
       dateKey: "2026-07-15",
     });

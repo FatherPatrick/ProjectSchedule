@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminEitherMock = vi.hoisted(() => vi.fn());
+const requireAdminSalonMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   appointment: {
     findMany: vi.fn(),
@@ -25,6 +26,7 @@ const sendNotificationsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdminEither: requireAdminEitherMock,
+  requireAdminSalon: requireAdminSalonMock,
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/domain/appointments", () => ({
@@ -45,6 +47,9 @@ import { POST as clearCancelledRoute } from "@/app/api/admin/appointments/clear-
 
 beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
+  requireAdminSalonMock
+    .mockReset()
+    .mockResolvedValue({ salonId: "salon_1", userId: "user_1" });
   prismaMock.appointment.findMany.mockReset().mockResolvedValue([]);
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
   prismaMock.appointment.create.mockReset().mockResolvedValue({
@@ -176,7 +181,7 @@ describe("POST /api/admin/appointments/[id]/approve", () => {
     const res = await call("appt_1");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(approveMock).toHaveBeenCalledWith("appt_1");
+    expect(approveMock).toHaveBeenCalledWith("salon_1", "appt_1");
   });
 });
 
@@ -209,7 +214,7 @@ describe("POST /api/admin/appointments/[id]/cancel", () => {
     cancelMock.mockResolvedValue({ ok: true });
     const res = await call("appt_1", { message: "  Sorry  " });
     expect(res.status).toBe(200);
-    expect(cancelMock).toHaveBeenCalledWith("appt_1", {
+    expect(cancelMock).toHaveBeenCalledWith("salon_1", "appt_1", {
       byAdmin: true,
       note: "Sorry",
     });
@@ -218,7 +223,7 @@ describe("POST /api/admin/appointments/[id]/cancel", () => {
   it("treats an empty / whitespace-only message as undefined", async () => {
     cancelMock.mockResolvedValue({ ok: true });
     await call("appt_1", { message: "   " });
-    expect(cancelMock).toHaveBeenCalledWith("appt_1", {
+    expect(cancelMock).toHaveBeenCalledWith("salon_1", "appt_1", {
       byAdmin: true,
       note: undefined,
     });
@@ -353,7 +358,7 @@ describe("POST /api/admin/appointments/clear-cancelled", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, count: 3 });
     expect(prismaMock.appointment.deleteMany).toHaveBeenCalledWith({
-      where: { status: "CANCELLED" },
+      where: { salonId: "salon_1", status: "CANCELLED" },
     });
   });
 });

@@ -27,9 +27,11 @@ import { hhmmToMinutes } from "@/lib/domain/dates";
 import {
   ALLOWED_GRANULARITIES,
   _shared,
+  appearanceUpdateSchema,
   businessHoursJsonSaveSchema,
   businessHoursScheduleJsonCreateSchema,
   serviceJsonCreateSchema,
+  type AppearanceUpdate,
   type ServiceJsonCreate,
 } from "./adminJson";
 
@@ -218,6 +220,24 @@ export function parseScheduledChangeDeleteForm(
   return scheduledChangeDeleteSchema.parse({
     effectiveFrom: String(fd.get("effectiveFrom") ?? "").trim(),
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Appearance                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The form posts every field on every save (color inputs always render a
+ * value), so this just strips blanks and re-validates against the canonical
+ * schema — there's no form-specific coercion needed here.
+ */
+export function parseAppearanceUpdateForm(fd: FormData): AppearanceUpdate {
+  const raw: Record<string, string> = {};
+  for (const key of ["brandColor", "accentColor", "backgroundColor", "fontKey"] as const) {
+    const v = fd.get(key);
+    if (typeof v === "string" && v.trim()) raw[key] = v.trim();
+  }
+  return appearanceUpdateSchema.parse(raw);
 }
 
 /* -------------------------------------------------------------------------- */

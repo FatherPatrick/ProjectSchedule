@@ -64,7 +64,7 @@ export function TimeSlotPicker({
               className={cn(
                 "rounded-lg border px-2 py-2 text-sm",
                 !proposeMode && startISO === slot.startISO
-                  ? "border-pink-600 bg-pink-50 text-pink-800"
+                  ? "border-brand bg-brand-soft text-brand"
                   : "border-neutral-200 hover:bg-neutral-50"
               )}
             >
@@ -79,7 +79,7 @@ export function TimeSlotPicker({
           <button
             type="button"
             onClick={onEnterPropose}
-            className="text-sm rounded-full border border-pink-300 text-pink-800 px-3 py-1.5 hover:bg-pink-50"
+            className="text-sm rounded-full border border-brand-soft text-brand px-3 py-1.5 hover:bg-brand-soft"
           >
             None of these work? Propose a custom time
           </button>

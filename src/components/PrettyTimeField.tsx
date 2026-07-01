@@ -241,15 +241,15 @@ export function PrettyTimeField({
                 left: menuStyle.left,
                 minWidth: menuStyle.width,
               }}
-              className="z-50 rounded-2xl border border-pink-200 bg-white/95 p-3 shadow-xl shadow-pink-200/40 backdrop-blur"
+              className="z-50 rounded-2xl border border-brand-soft bg-white/95 p-3 shadow-xl shadow-brand/20 backdrop-blur"
             >
               <div className="mb-2 flex items-baseline justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-pink-600">
+                <p className="text-xs font-semibold uppercase tracking-wide text-brand">
                   Pick a time
                 </p>
                 <p className="text-sm font-mono text-neutral-700">
                   {pad(h12)}:{pad(m)}{" "}
-                  <span className="text-pink-600 font-semibold">{period}</span>
+                  <span className="text-brand font-semibold">{period}</span>
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -283,7 +283,7 @@ export function PrettyTimeField({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:from-pink-600 hover:to-rose-600"
+                  className="rounded-full bg-gradient-to-r from-brand to-brand-hover px-3 py-1 text-xs font-semibold text-brand-contrast shadow-sm hover:brightness-95"
                 >
                   Done
                 </button>
@@ -342,7 +342,7 @@ function ScrollColumn<V extends string | number>({
       <ul
         ref={listRef}
         aria-labelledby={labelId}
-        className="h-44 overflow-y-auto no-scrollbar rounded-xl border border-pink-100 bg-pink-50/30 p-1"
+        className="h-44 overflow-y-auto no-scrollbar rounded-xl border border-brand-soft bg-brand-soft/30 p-1"
       >
         {values.map((v) => {
           const isSelected = v === selected;
@@ -355,8 +355,8 @@ function ScrollColumn<V extends string | number>({
                 className={cn(
                   "block w-full rounded-lg px-2 py-1 text-center text-sm transition-colors",
                   isSelected
-                    ? "bg-gradient-to-r from-pink-500 to-rose-500 font-semibold text-white shadow-sm"
-                    : "text-neutral-700 hover:bg-pink-100 hover:text-pink-800"
+                    ? "bg-gradient-to-r from-brand to-brand-hover font-semibold text-brand-contrast shadow-sm"
+                    : "text-neutral-700 hover:bg-brand-soft hover:text-brand"
                 )}
               >
                 {typeof v === "number" ? pad(v) : v}

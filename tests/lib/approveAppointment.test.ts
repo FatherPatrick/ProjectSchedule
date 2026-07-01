@@ -31,8 +31,11 @@ vi.mock("@/lib/observability/reportError", () => ({
 
 import { approveAppointment } from "@/lib/domain/appointments";
 
+const SALON_ID = "salon_1";
+
 interface ApptStub {
   id: string;
+  salonId: string;
   status: "PENDING" | "CONFIRMED" | "CANCELLED";
   startsAt: Date;
   endsAt: Date;
@@ -73,6 +76,7 @@ afterEach(() => {
 describe("approveAppointment — Serializable transaction", () => {
   const pending: ApptStub = {
     id: "appt_1",
+    salonId: SALON_ID,
     status: "PENDING",
     startsAt: new Date("2026-06-01T15:00:00Z"),
     endsAt: new Date("2026-06-01T16:00:00Z"),
@@ -87,7 +91,7 @@ describe("approveAppointment — Serializable transaction", () => {
       return cb(tx);
     });
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out).toEqual({ ok: true });
     expect(findUnique).toHaveBeenCalledWith({ where: { id: "appt_1" } });
     expect(findFirst).toHaveBeenCalledTimes(1);
@@ -102,7 +106,7 @@ describe("approveAppointment — Serializable transaction", () => {
     const { tx, update } = makeTx({ appt: null });
     txnMock.mockImplementationOnce(async (cb) => cb(tx));
 
-    const out = await approveAppointment("missing");
+    const out = await approveAppointment(SALON_ID, "missing");
     expect(out).toEqual({ ok: false, status: 404, error: "Not found" });
     expect(update).not.toHaveBeenCalled();
     expect(sendNotificationsMock).not.toHaveBeenCalled();
@@ -114,7 +118,7 @@ describe("approveAppointment — Serializable transaction", () => {
     });
     txnMock.mockImplementationOnce(async (cb) => cb(tx));
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out.ok).toBe(false);
     expect((out as { status: number }).status).toBe(409);
     expect(update).not.toHaveBeenCalled();
@@ -124,6 +128,7 @@ describe("approveAppointment — Serializable transaction", () => {
   it("returns 409 when an overlapping CONFIRMED appointment exists", async () => {
     const conflict: ApptStub = {
       id: "appt_other",
+      salonId: SALON_ID,
       status: "CONFIRMED",
       startsAt: pending.startsAt,
       endsAt: pending.endsAt,
@@ -131,7 +136,7 @@ describe("approveAppointment — Serializable transaction", () => {
     const { tx, update } = makeTx({ appt: pending, conflict });
     txnMock.mockImplementationOnce(async (cb) => cb(tx));
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out.ok).toBe(false);
     expect((out as { error: string }).error).toMatch(/overlaps/);
     expect(update).not.toHaveBeenCalled();
@@ -150,7 +155,7 @@ describe("approveAppointment — Serializable transaction", () => {
         return cb(tx);
       });
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out).toEqual({ ok: true });
     expect(txnMock).toHaveBeenCalledTimes(2);
     expect(sendNotificationsMock).toHaveBeenCalledTimes(1);
@@ -170,7 +175,7 @@ describe("approveAppointment — Serializable transaction", () => {
         return cb(tx);
       });
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out.ok).toBe(false);
     expect((out as { status: number }).status).toBe(409);
     expect(sendNotificationsMock).not.toHaveBeenCalled();
@@ -183,7 +188,7 @@ describe("approveAppointment — Serializable transaction", () => {
     );
     txnMock.mockRejectedValue(p2034);
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out.ok).toBe(false);
     expect((out as { status: number }).status).toBe(409);
     // 3 attempts total per APPROVE_MAX_ATTEMPTS.
@@ -205,7 +210,7 @@ describe("approveAppointment — Serializable transaction", () => {
     });
     txnMock.mockRejectedValueOnce(otherErr);
 
-    const out = await approveAppointment("appt_1");
+    const out = await approveAppointment(SALON_ID, "appt_1");
     expect(out.ok).toBe(false);
     expect(txnMock).toHaveBeenCalledTimes(1);
     expect(reportErrorMock).toHaveBeenCalledWith(

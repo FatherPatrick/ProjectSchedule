@@ -55,8 +55,8 @@ async function run() {
     console.log(`  Salon already exists (id=${resolvedSalonId}), skipping create.`);
   } else {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Salon" (id, slug, name, timezone, status, "themeColor", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, 'ACTIVE', '#fdf2f8', $5::timestamptz, $5::timestamptz)`,
+      `INSERT INTO "Salon" (id, slug, name, timezone, status, "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, 'ACTIVE', $5::timestamptz, $5::timestamptz)`,
       salonId,
       SALON_SLUG,
       SALON_NAME,

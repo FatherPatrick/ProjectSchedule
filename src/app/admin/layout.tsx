@@ -30,7 +30,7 @@ export default async function AdminLayout({
             await signOut({ redirectTo: "/" });
           }}
         >
-          <button className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm transition hover:border-pink-200 hover:text-pink-700">
+          <button className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-600 shadow-sm transition hover:border-brand-soft hover:text-brand">
             Sign out
           </button>
         </form>

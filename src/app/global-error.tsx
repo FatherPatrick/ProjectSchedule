@@ -24,6 +24,9 @@ export default function GlobalError({
               marginTop: "1rem",
               padding: "0.5rem 1rem",
               borderRadius: "0.5rem",
+              // Intentionally hardcoded, not themed: this boundary replaces the
+              // entire <html>, so globals.css/Tailwind and salon context may not
+              // be available. Platform default color as a last-resort fallback.
               background: "#db2777",
               color: "white",
               border: "none",

@@ -63,7 +63,7 @@ export default async function AdminCalendar() {
                     {formatBiz(a.startsAt, "EEE, MMM d 'at' h:mm a")} —{" "}
                     <Link
                       href={`/admin/clients/${a.client.id}`}
-                      className="hover:text-pink-600 transition-colors"
+                      className="hover:text-brand transition-colors"
                     >
                       {a.client.name}
                     </Link>
@@ -114,7 +114,7 @@ export default async function AdminCalendar() {
                     {formatBiz(a.startsAt, "h:mm a")} —{" "}
                     <Link
                       href={`/admin/clients/${a.client.id}`}
-                      className="hover:text-pink-600 transition-colors"
+                      className="hover:text-brand transition-colors"
                     >
                       {a.client.name}
                     </Link>

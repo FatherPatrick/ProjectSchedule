@@ -12,6 +12,7 @@ import {
   Clock,
   Contact,
   LayoutDashboard,
+  Paintbrush,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const TABS = [
   { href: "/admin/services", label: "Services", icon: Sparkles },
   { href: "/admin/blackouts", label: "Blackouts", icon: CalendarOff },
   { href: "/admin/hours", label: "Hours", icon: Clock },
+  { href: "/admin/appearance", label: "Appearance", icon: Paintbrush },
   { href: "/admin/admins", label: "Admins", icon: Users },
 ];
 
@@ -73,7 +75,7 @@ export default function AdminNav() {
       <nav
         ref={scrollerRef}
         aria-label="Admin sections"
-        className="flex flex-nowrap gap-1.5 overflow-x-auto rounded-2xl border border-pink-100 bg-white/70 p-1.5 shadow-sm backdrop-blur [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+        className="flex flex-nowrap gap-1.5 overflow-x-auto rounded-2xl border border-brand-soft bg-white/70 p-1.5 shadow-sm backdrop-blur [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
       >
         {TABS.map(({ href, label, icon: Icon }) => {
           const active =
@@ -88,8 +90,8 @@ export default function AdminNav() {
               className={cn(
                 "group relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
                 active
-                  ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-md shadow-pink-200/60"
-                  : "text-neutral-600 hover:bg-pink-50 hover:text-pink-700"
+                  ? "bg-gradient-to-r from-brand to-brand-hover text-brand-contrast shadow-md shadow-brand/30"
+                  : "text-neutral-600 hover:bg-brand-soft hover:text-brand"
               )}
             >
               <Icon
@@ -97,7 +99,7 @@ export default function AdminNav() {
                   "h-4 w-4 transition-transform",
                   active
                     ? "drop-shadow-sm"
-                    : "text-neutral-400 group-hover:text-pink-500 group-hover:scale-110"
+                    : "text-neutral-400 group-hover:text-brand group-hover:scale-110"
                 )}
                 aria-hidden
               />
@@ -119,7 +121,7 @@ export default function AdminNav() {
           canScrollLeft ? "opacity-100" : "pointer-events-none opacity-0"
         )}
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-pink-600 shadow ring-1 ring-pink-100">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-brand shadow ring-1 ring-brand-soft">
           <ChevronLeft className="h-4 w-4" aria-hidden />
         </span>
       </button>
@@ -133,7 +135,7 @@ export default function AdminNav() {
           canScrollRight ? "opacity-100" : "pointer-events-none opacity-0"
         )}
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-pink-600 shadow ring-1 ring-pink-100">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-brand shadow ring-1 ring-brand-soft">
           <ChevronRight className="h-4 w-4" aria-hidden />
         </span>
       </button>

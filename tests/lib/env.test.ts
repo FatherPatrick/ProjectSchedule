@@ -6,9 +6,9 @@ const PROD_BASE: NodeJS.ProcessEnv = {
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
   AUTH_SECRET: "x".repeat(32),
   MOBILE_TOKEN_SECRET: "y".repeat(32),
-  NEXT_PUBLIC_APP_URL: "https://example.com",
-  ADMIN_PHONES: "+15555551212",
+  NEXT_PUBLIC_APP_BASE_DOMAIN: "example.com",
   CRON_SECRET: "cron-secret",
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_xxx",
   RESEND_API_KEY: "re_xxx",
   EMAIL_FROM: "Studio <bookings@example.com>",
   TWILIO_ACCOUNT_SID: "AC_xxx",
@@ -23,7 +23,6 @@ describe("validateEnvObject", () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.env.NODE_ENV).toBe("production");
-      expect(r.env.ADMIN_PHONES).toEqual(["+15555551212"]);
       expect(r.warnings).toEqual([]);
     }
   });
@@ -57,9 +56,9 @@ describe("validateEnvObject", () => {
       const joined = r.errors.join("\n");
       expect(joined).toMatch(/AUTH_SECRET/);
       expect(joined).toMatch(/MOBILE_TOKEN_SECRET/);
-      expect(joined).toMatch(/NEXT_PUBLIC_APP_URL/);
-      expect(joined).toMatch(/ADMIN_PHONES/);
+      expect(joined).toMatch(/NEXT_PUBLIC_APP_BASE_DOMAIN/);
       expect(joined).toMatch(/CRON_SECRET/);
+      expect(joined).toMatch(/BLOB_READ_WRITE_TOKEN/);
       expect(joined).toMatch(/RESEND_API_KEY/);
       expect(joined).toMatch(/TWILIO_ACCOUNT_SID/);
       expect(joined).toMatch(/TWILIO_VERIFY_SERVICE_SID/);
@@ -73,21 +72,13 @@ describe("validateEnvObject", () => {
     if (!r.ok) expect(r.errors.join("\n")).toMatch(/DATABASE_URL/);
   });
 
-  it("rejects malformed ADMIN_PHONES", () => {
+  it("rejects production env missing only the Turnstile pairing (secret set, site key unset)", () => {
     const r = validateEnvObject({
       ...PROD_BASE,
-      ADMIN_PHONES: "not-a-phone, also-bad",
+      TURNSTILE_SECRET_KEY: "secret",
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errors.join("\n")).toMatch(/E\.164/);
-  });
-
-  it("rejects malformed NEXT_PUBLIC_APP_URL", () => {
-    const r = validateEnvObject({
-      ...PROD_BASE,
-      NEXT_PUBLIC_APP_URL: "notaurl",
-    });
-    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.join("\n")).toMatch(/TURNSTILE/);
   });
 
   it("treats dev as lenient: missing integration creds become warnings, not errors", () => {

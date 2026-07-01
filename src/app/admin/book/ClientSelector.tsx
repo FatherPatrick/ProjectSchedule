@@ -53,8 +53,8 @@ export function ClientSelector({
             className={cn(
               "rounded-full px-3 py-1 font-medium transition-colors",
               mode === m
-                ? "bg-pink-600 text-white"
-                : "text-neutral-600 hover:text-pink-700"
+                ? "bg-brand text-brand-contrast"
+                : "text-neutral-600 hover:text-brand"
             )}
           >
             {m === "existing" ? "Existing client" : "New client"}
@@ -65,7 +65,7 @@ export function ClientSelector({
       {mode === "existing" ? (
         <div className="space-y-2">
           {selected ? (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-pink-200 bg-pink-50 p-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-soft bg-brand-soft p-3">
               <div className="min-w-0">
                 <div className="font-medium truncate">{selected.name}</div>
                 <div className="text-xs text-neutral-600 truncate">
@@ -75,7 +75,7 @@ export function ClientSelector({
               <button
                 type="button"
                 onClick={onClearSelected}
-                className="text-xs text-pink-700 underline underline-offset-2 shrink-0"
+                className="text-xs text-brand underline underline-offset-2 shrink-0"
               >
                 Change
               </button>
@@ -105,7 +105,7 @@ export function ClientSelector({
                         <button
                           type="button"
                           onClick={() => onSelect(c)}
-                          className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-pink-50"
+                          className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-brand-soft"
                         >
                           <span className="font-medium">{c.name}</span>
                           <span className="text-xs text-neutral-500">

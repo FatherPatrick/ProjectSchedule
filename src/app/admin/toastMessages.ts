@@ -17,10 +17,19 @@ export const SAVED_MESSAGES: Record<string, string> = {
   notify: "Notification preference updated.",
   // shared (services delete + scheduled-change delete)
   deleted: "Deleted.",
+  // appearance
+  appearance: "Appearance updated.",
+  logo: "Logo uploaded.",
+  logo_removed: "Logo removed.",
 };
 
 export const ERROR_MESSAGES: Record<string, string> = {
   invalid: "That doesn't look like a valid phone number.",
   env: "This phone is managed via the ADMIN_PHONES env var and can't be removed here.",
   self: "You can't remove your own admin access.",
+  // appearance / logo upload
+  logo_empty: "Choose a file to upload.",
+  logo_invalid_type: "Logo must be a PNG, JPEG, WebP, or SVG image.",
+  logo_too_large: "Logo must be 1 MB or smaller.",
+  logo_sanitize_failed: "That SVG couldn't be sanitized safely — try a PNG/JPEG/WebP instead.",
 };

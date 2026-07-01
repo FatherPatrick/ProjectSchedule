@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
+  salon: { findUnique: vi.fn() },
   user: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
   mobileSession: {
     create: vi.fn(),
@@ -53,6 +54,8 @@ import { POST as refreshRoute } from "@/app/api/auth/mobile/refresh/route";
 import { POST as logoutRoute } from "@/app/api/auth/mobile/logout/route";
 import { _resetRateLimitStoreForTests } from "@/lib/rateLimit";
 
+const SALON_ID = "salon_1";
+
 function postJson(
   path: string,
   body: unknown,
@@ -63,6 +66,7 @@ function postJson(
     headers: {
       "content-type": "application/json",
       "x-forwarded-for": ip,
+      "x-salon-slug": "test-salon",
     },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
@@ -71,6 +75,7 @@ function postJson(
 beforeEach(() => {
   _resetRateLimitStoreForTests();
   vi.clearAllMocks();
+  prismaMock.salon.findUnique.mockResolvedValue({ id: SALON_ID });
   isAdminPhoneMock.mockReturnValue(true);
   hashRefreshTokenMock.mockImplementation((t: string) => `hash(${t})`);
   generateRefreshTokenMock.mockReturnValue("new-refresh-token-1234567890");
@@ -223,7 +228,7 @@ describe("POST /api/auth/mobile/otp/verify", () => {
     const body = await res.json();
     expect(body.accessToken).toBe("access-jwt");
     expect(body.refreshToken).toBe("new-refresh-token-1234567890");
-    expect(body.user).toEqual({ id: "user_1", role: "ADMIN" });
+    expect(body.user).toEqual({ id: "user_1", role: "ADMIN", salonId: SALON_ID });
     expect(prismaMock.user.create).not.toHaveBeenCalled();
     expect(prismaMock.mobileSession.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -371,7 +376,7 @@ describe("POST /api/auth/mobile/refresh", () => {
       userId: "user_1",
       revokedAt: null,
       expiresAt: new Date("2026-12-01T00:00:00Z"),
-      user: { role: "ADMIN" },
+      user: { role: "ADMIN", salonId: SALON_ID },
     });
     prismaMock.$transaction.mockResolvedValueOnce([
       {},

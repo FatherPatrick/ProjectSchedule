@@ -20,7 +20,7 @@ export default async function Home() {
 
   return (
     <div className="space-y-10">
-      <section className="rounded-3xl bg-white p-6 sm:p-10 shadow-sm border border-pink-100">
+      <section className="rounded-3xl bg-white p-6 sm:p-10 shadow-sm border border-brand-soft">
         <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
           Book your next nail appointment
         </h1>

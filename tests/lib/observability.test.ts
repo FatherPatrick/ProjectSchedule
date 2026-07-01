@@ -6,8 +6,11 @@ let stdoutSpy: ReturnType<typeof vi.spyOn>;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-  stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  // The logger emits via console.log/console.error (not process.stdout/
+  // stderr.write directly) so it also works in the Edge Runtime, which has
+  // no `process.stdout`.
+  stdoutSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  stderrSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {

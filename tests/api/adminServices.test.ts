@@ -6,12 +6,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminEitherMock = vi.hoisted(() => vi.fn());
+const requireAdminSalonMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   service: { findMany: vi.fn(), create: vi.fn() },
 }));
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdminEither: requireAdminEitherMock,
+  requireAdminSalon: requireAdminSalonMock,
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 
@@ -30,6 +32,9 @@ function postReq(body: unknown): Request {
 
 beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
+  requireAdminSalonMock
+    .mockReset()
+    .mockResolvedValue({ salonId: "salon_1", userId: "user_1" });
   prismaMock.service.findMany.mockReset().mockResolvedValue([]);
   prismaMock.service.create.mockReset();
 });
@@ -44,10 +49,13 @@ describe("GET /api/admin/services", () => {
 
   it("includes inactive rows by default and excludes them when ?includeInactive=false", async () => {
     await GET(getReq());
-    expect(prismaMock.service.findMany.mock.calls[0][0].where).toEqual({});
+    expect(prismaMock.service.findMany.mock.calls[0][0].where).toEqual({
+      salonId: "salon_1",
+    });
 
     await GET(getReq("includeInactive=false"));
     expect(prismaMock.service.findMany.mock.calls[1][0].where).toEqual({
+      salonId: "salon_1",
       active: true,
     });
   });

@@ -7,7 +7,11 @@ export interface SalonContext {
   name: string;
   timezone: string;
   instagram: string | null;
-  themeColor: string;
+  brandColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  fontKey: string;
+  logoUrl: string | null;
   status: "ACTIVE" | "SUSPENDED" | "PENDING";
 }
 
@@ -30,7 +34,11 @@ async function getSalonBySlug(slug: string): Promise<SalonContext | null> {
       name: true,
       timezone: true,
       instagram: true,
-      themeColor: true,
+      brandColor: true,
+      accentColor: true,
+      backgroundColor: true,
+      fontKey: true,
+      logoUrl: true,
       status: true,
     },
   });
@@ -82,7 +90,8 @@ export async function getSalonFromContext(): Promise<SalonContext | null> {
   // Phase 4 removes this path once the admin session carries salonId.
   if (process.env.NODE_ENV === "development") {
     const rows = await prisma.$queryRawUnsafe<SalonContext[]>(
-      `SELECT id, slug, name, timezone, instagram, "themeColor", status
+      `SELECT id, slug, name, timezone, instagram, "brandColor", "accentColor",
+              "backgroundColor", "fontKey", "logoUrl", status
        FROM "Salon" WHERE status = 'ACTIVE' ORDER BY "createdAt" ASC LIMIT 1`
     );
     return rows[0] ?? null;

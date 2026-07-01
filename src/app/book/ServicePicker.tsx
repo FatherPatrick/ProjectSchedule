@@ -22,7 +22,7 @@ export function ServicePicker({
               key={s.id}
               className={cn(
                 "flex items-start gap-3 rounded-xl border p-3 cursor-pointer min-w-0 h-full",
-                isSelected ? "border-pink-600 bg-pink-50" : "border-neutral-200"
+                isSelected ? "border-brand bg-brand-soft" : "border-neutral-200"
               )}
             >
               <input

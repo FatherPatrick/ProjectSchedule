@@ -17,12 +17,14 @@ describe("mobile access tokens", () => {
       userId: "u1",
       sessionId: "s1",
       role: "ADMIN",
+      salonId: "salon_1",
     });
     const payload = verifyAccessToken(token);
     expect(payload).not.toBeNull();
     expect(payload!.sub).toBe("u1");
     expect(payload!.sid).toBe("s1");
     expect(payload!.role).toBe("ADMIN");
+    expect(payload!.salonId).toBe("salon_1");
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(expiresAt.getTime()).toBeLessThanOrEqual(
       Date.now() + (ACCESS_TOKEN_TTL_SECONDS + 1) * 1000
@@ -34,6 +36,7 @@ describe("mobile access tokens", () => {
       userId: "u1",
       sessionId: "s1",
       role: "ADMIN",
+      salonId: "salon_1",
     });
     const [, sig] = token.split(".");
     // Re-encode a payload claiming a different user, keep the original sig.
@@ -50,6 +53,7 @@ describe("mobile access tokens", () => {
       userId: "u1",
       sessionId: "s1",
       role: "ADMIN",
+      salonId: "salon_1",
       ttlSeconds: -10,
     });
     expect(verifyAccessToken(token)).toBeNull();

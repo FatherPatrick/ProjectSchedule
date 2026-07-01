@@ -9,6 +9,8 @@
  * up everywhere — JSON endpoints and form posts both.
  */
 import { z } from "zod";
+import { isValidHex } from "@/lib/theme/color";
+import { FONT_KEYS } from "@/lib/theme/fontKeys";
 
 /* -------------------------------------------------------------------------- */
 /*                            Shared field atoms                              */
@@ -177,6 +179,32 @@ export const settingsUpdateSchema = z
     message: "Provide at least one field to update.",
   });
 export type SettingsUpdate = z.infer<typeof settingsUpdateSchema>;
+
+/* -------------------------------------------------------------------------- */
+/*                                Appearance                                  */
+/* -------------------------------------------------------------------------- */
+
+const hexColorField = z
+  .string()
+  .trim()
+  .refine(isValidHex, { message: "Must be a hex color like #db2777." });
+
+export const appearanceUpdateSchema = z
+  .object({
+    brandColor: hexColorField.optional(),
+    accentColor: hexColorField.optional(),
+    backgroundColor: hexColorField.optional(),
+    fontKey: z
+      .string()
+      .refine((v) => (FONT_KEYS as readonly string[]).includes(v), {
+        message: "Unsupported font.",
+      })
+      .optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Provide at least one field to update.",
+  });
+export type AppearanceUpdate = z.infer<typeof appearanceUpdateSchema>;
 
 /* -------------------------------------------------------------------------- */
 /*                              Push registration                             */

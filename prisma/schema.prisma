@@ -13,17 +13,26 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Salon {
-  id         String      @id @default(cuid())
+  id              String      @id @default(cuid())
   /// URL subdomain, e.g. "polished" in polished.app.com. Lowercase, unique.
   /// Immutable after creation — slugs appear in every client-facing link.
-  slug       String      @unique
-  name       String
-  timezone   String      @default("America/Los_Angeles")
-  instagram  String?
-  themeColor String      @default("#fdf2f8")
-  status     SalonStatus @default(ACTIVE)
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  slug            String      @unique
+  name            String
+  timezone        String      @default("America/Los_Angeles")
+  instagram       String?
+  /// Primary brand color (hex, validated). Drives buttons, links, primary accents.
+  brandColor      String      @default("#db2777") // current pink-600
+  /// Secondary accent color (hex, validated). Independently editable.
+  accentColor     String      @default("#db2777") // defaults to brand until customized
+  /// Page/background tint (hex, validated). Was `themeColor` pre-appearance-theming.
+  backgroundColor String      @default("#fdf2f8") // current pink-50-ish tint
+  /// Curated font key, e.g. "geist" | "playfair" | "poppins". Maps to a bundled font.
+  fontKey         String      @default("geist")
+  /// Vercel Blob URL of the uploaded logo; null → render the salon name as text.
+  logoUrl         String?
+  status          SalonStatus @default(ACTIVE)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   services      Service[]
   clients       Client[]

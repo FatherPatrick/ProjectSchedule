@@ -59,6 +59,9 @@ const baseSchema = z.object({
   // Cron auth (Vercel Cron sends Bearer token).
   CRON_SECRET: nonEmpty.optional(),
 
+  // Vercel Blob (salon appearance logo uploads).
+  BLOB_READ_WRITE_TOKEN: nonEmpty.optional(),
+
   // CORS dev allow-list.
   MOBILE_DEV_ORIGINS: z.string().optional(),
 
@@ -102,6 +105,10 @@ function collectProdProblems(env: Env): string[] {
 
   if (!env.CRON_SECRET) {
     problems.push("CRON_SECRET is required in production (Vercel Cron auth).");
+  }
+
+  if (!env.BLOB_READ_WRITE_TOKEN) {
+    problems.push("BLOB_READ_WRITE_TOKEN is required in production (salon logo uploads).");
   }
 
   // Email.

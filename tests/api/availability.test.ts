@@ -7,11 +7,15 @@
  * response envelope. Domain math itself is covered by
  * `tests/lib/availability.test.ts`.
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAvailableSlotsMock = vi.hoisted(() => vi.fn());
+const getPublicSalonMock = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/domain/availability", () => ({
   getAvailableSlots: getAvailableSlotsMock,
+}));
+vi.mock("@/lib/domain/salon", () => ({
+  getPublicSalon: getPublicSalonMock,
 }));
 
 import { GET } from "@/app/api/availability/route";
@@ -20,7 +24,23 @@ function req(qs: string): Request {
   return new Request(`http://localhost/api/availability?${qs}`);
 }
 
+const SALON_ID = "salon_1";
+
 describe("GET /api/availability", () => {
+  beforeEach(() => {
+    getPublicSalonMock.mockReset().mockResolvedValue({
+      ok: true,
+      salon: {
+        id: SALON_ID,
+        slug: "test-salon",
+        name: "Test Salon",
+        timezone: "America/Los_Angeles",
+        instagram: null,
+        status: "ACTIVE",
+      },
+    });
+  });
+
   it("400s on missing query parameters", async () => {
     const res = await GET(req(""));
     expect(res.status).toBe(400);
@@ -48,6 +68,7 @@ describe("GET /api/availability", () => {
       ],
     });
     expect(getAvailableSlotsMock).toHaveBeenCalledWith({
+      salonId: SALON_ID,
       serviceId: "svc_1",
       dateKey: "2026-05-13",
     });

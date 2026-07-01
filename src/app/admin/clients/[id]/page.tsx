@@ -58,7 +58,7 @@ export default async function ClientDetailPage({
       <div className="flex items-center gap-2">
         <Link
           href="/admin/clients"
-          className="text-sm text-neutral-500 hover:text-pink-600 transition-colors"
+          className="text-sm text-neutral-500 hover:text-brand transition-colors"
         >
           ← Clients
         </Link>
