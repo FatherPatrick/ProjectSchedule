@@ -6,7 +6,8 @@
  * Expo Go process or a LAN URL) and needs explicit CORS headers.
  *
  * Allowed origins:
- *   - The deployed app URL (`APP_URL`, set in env).
+ *   - The platform domain and any tenant subdomain of it
+ *     (`APP_BASE_DOMAIN`, e.g. `app.com` or `<slug>.app.com`).
  *   - `http://localhost:8081` (Expo web).
  *   - Anything in `MOBILE_DEV_ORIGINS` (comma-separated, e.g.
  *     `http://192.168.1.50:8081,http://192.168.1.50:19006`).
@@ -15,11 +16,10 @@
  * `http://192.168.*` / `http://10.*` origin to avoid configuration overhead
  * on a fresh laptop.
  */
-import { APP_URL } from "./config";
+import { APP_BASE_DOMAIN } from "./config";
 
 const STATIC_ALLOW = new Set<string>(
   [
-    APP_URL,
     "http://localhost:8081",
     "http://localhost:19006",
     ...(process.env.MOBILE_DEV_ORIGINS ?? "")
@@ -31,9 +31,18 @@ const STATIC_ALLOW = new Set<string>(
 
 const LAN_DEV_REGEX = /^https?:\/\/(192\.168|10\.|127\.0\.0\.1|localhost)(\.|:)/;
 
+// Matches the platform apex domain and any tenant subdomain of it, e.g.
+// `https://app.com` or `https://polished.app.com` (or their localhost
+// equivalents in dev, since APP_BASE_DOMAIN defaults to "localhost:3000").
+const escapedDomain = APP_BASE_DOMAIN.replace(/[.*+^${}()|[\]\\]/g, "\\$&");
+const TENANT_ORIGIN_REGEX = new RegExp(
+  `^https?://([a-z0-9-]+\\.)?${escapedDomain}$`
+);
+
 export function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (STATIC_ALLOW.has(origin)) return true;
+  if (TENANT_ORIGIN_REGEX.test(origin)) return true;
   if (process.env.NODE_ENV !== "production" && LAN_DEV_REGEX.test(origin)) {
     return true;
   }

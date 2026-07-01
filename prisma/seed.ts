@@ -1,15 +1,34 @@
 import { PrismaClient } from "@prisma/client";
-import { DEFAULT_BUSINESS_HOURS } from "../src/lib/config";
+import {
+  BUSINESS_NAME,
+  BUSINESS_TIMEZONE,
+  DEFAULT_BUSINESS_HOURS,
+} from "../src/lib/config";
 
 const prisma = new PrismaClient();
 
+const DEV_SALON_SLUG = "demo";
+
 async function main() {
+  // Dev/demo salon — real salons are created via the signup flow.
+  const salon = await prisma.salon.upsert({
+    where: { slug: DEV_SALON_SLUG },
+    update: {},
+    create: {
+      slug: DEV_SALON_SLUG,
+      name: BUSINESS_NAME,
+      timezone: BUSINESS_TIMEZONE,
+    },
+  });
+
   // Business hours
   for (const h of DEFAULT_BUSINESS_HOURS) {
     await prisma.businessHours.upsert({
-      where: { dayOfWeek: h.dayOfWeek },
+      where: {
+        salonId_dayOfWeek: { salonId: salon.id, dayOfWeek: h.dayOfWeek },
+      },
       update: { openMin: h.openMin, closeMin: h.closeMin, active: h.active },
-      create: h,
+      create: { ...h, salonId: salon.id },
     });
   }
 
@@ -45,11 +64,15 @@ async function main() {
     },
   ];
   for (const s of services) {
-    const existing = await prisma.service.findFirst({ where: { name: s.name } });
-    if (!existing) await prisma.service.create({ data: s });
+    const existing = await prisma.service.findFirst({
+      where: { salonId: salon.id, name: s.name },
+    });
+    if (!existing) {
+      await prisma.service.create({ data: { ...s, salonId: salon.id } });
+    }
   }
 
-  console.log("Seed complete.");
+  console.log(`Seed complete for salon "${salon.slug}".`);
 }
 
 main()
