@@ -21,6 +21,10 @@ export const SAVED_MESSAGES: Record<string, string> = {
   appearance: "Appearance updated.",
   logo: "Logo uploaded.",
   logo_removed: "Logo removed.",
+  // payments
+  stripe_returned: "Welcome back. Stripe status updates automatically once onboarding is confirmed.",
+  payments_config: "Payment settings updated.",
+  refund_issued: "Refund issued.",
 };
 
 export const ERROR_MESSAGES: Record<string, string> = {
@@ -32,4 +36,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   logo_invalid_type: "Logo must be a PNG, JPEG, WebP, or SVG image.",
   logo_too_large: "Logo must be 1 MB or smaller.",
   logo_sanitize_failed: "That SVG couldn't be sanitized safely — try a PNG/JPEG/WebP instead.",
+  // payments
+  stripe_connect_failed: "Couldn't start Stripe onboarding. Try again in a moment.",
+  stripe_login_link_failed: "Couldn't open the Stripe dashboard. Try again in a moment.",
+  payments_not_ready: "Finish connecting Stripe before enabling payments.",
+  refund_failed: "Couldn't issue the refund. Try again in a moment.",
 };

@@ -334,6 +334,15 @@ model Payment {
   @@index([appointmentId])
 }
 
+/// Dedupe guard for the Stripe webhook (docs/STRIPE_SPEC.md §5) — Stripe
+/// retries delivery, so each `event.id` is recorded once processed and any
+/// replay is a no-op.
+model ProcessedStripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------

@@ -17,7 +17,19 @@ import { DatePicker } from "./DatePicker";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { ContactFields } from "./ContactFields";
 import { BookingResultCard } from "./BookingResultCard";
+import { PaymentStep } from "./PaymentStep";
 import type { ServiceLite, Slot } from "./types";
+
+interface PendingPayment {
+  clientSecret: string;
+  publishableKey: string;
+  connectedAccountId: string;
+  amountCents: number;
+  managementToken: string;
+  serviceName: string;
+  whenLabel: string;
+  pendingApproval: boolean;
+}
 
 export function BookingForm({
   services,
@@ -58,6 +70,7 @@ export function BookingForm({
     serviceName: string;
     pending: boolean;
   } | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
 
   // Snapshot of "now" maintained via useSyncExternalStore so render-time logic
   // stays pure (React 19 forbids calling Date.now() directly during render).
@@ -276,11 +289,24 @@ export function BookingForm({
       if (!res.ok) throw new Error(data.error ?? "Could not book.");
       // Captcha tokens are single-use — reset for any subsequent submit.
       setCaptchaToken(null);
-      setDone({
-        when: data.whenLabel,
-        serviceName: data.serviceName,
-        pending: proposeMode,
-      });
+      if (data.requiresPayment) {
+        setPendingPayment({
+          clientSecret: data.clientSecret,
+          publishableKey: data.publishableKey,
+          connectedAccountId: data.connectedAccountId,
+          amountCents: data.amountCents,
+          managementToken: data.managementToken,
+          serviceName: data.serviceName,
+          whenLabel: data.whenLabel,
+          pendingApproval: proposeMode,
+        });
+      } else {
+        setDone({
+          when: data.whenLabel,
+          serviceName: data.serviceName,
+          pending: proposeMode,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -294,6 +320,7 @@ export function BookingForm({
         done={done}
         onReset={() => {
           setDone(null);
+          setPendingPayment(null);
           setStartISO(null);
           setProposeMode(false);
           setCustomDate("");
@@ -303,6 +330,18 @@ export function BookingForm({
           setSlots([]);
           setLoadedSlotsKey("");
           setError(null);
+        }}
+      />
+    );
+  }
+
+  if (pendingPayment) {
+    return (
+      <PaymentStep
+        {...pendingPayment}
+        onConfirmed={(result) => {
+          setPendingPayment(null);
+          setDone(result);
         }}
       />
     );

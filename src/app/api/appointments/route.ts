@@ -20,6 +20,14 @@ import {
 } from "@/lib/domain/settings";
 import { notifyAdminsOfBooking } from "@/lib/integrations/adminSms";
 import { getPublicSalon } from "@/lib/domain/salon";
+import { isStripePaymentsEnabled } from "@/lib/flags";
+import {
+  amountForBooking,
+  createPaymentIntentForAppointment,
+  getBookingPaymentContext,
+  PAYMENT_HOLD_MINUTES,
+} from "@/lib/domain/payments";
+import type { PublicBookingResponse } from "@/lib/api-types";
 
 // First-pass anti-abuse for the public booking endpoint. A captcha
 // (Turnstile / hCaptcha) is the long-term answer — see README TODO.
@@ -138,6 +146,17 @@ export async function POST(req: Request) {
     },
   });
 
+  // Only attempt a charge when the platform-wide kill-switch is on — a
+  // stale per-salon `paymentsEnabled` value must never take effect while
+  // Stripe is off platform-wide.
+  const paymentCtx = isStripePaymentsEnabled()
+    ? await getBookingPaymentContext(salon.id)
+    : null;
+  const charge =
+    paymentCtx?.stripeAccountId && paymentCtx.stripeChargesEnabled
+      ? amountForBooking(paymentCtx, service)
+      : null;
+
   const appointment = await prisma.appointment.create({
     data: {
       salonId: salon.id,
@@ -147,8 +166,43 @@ export async function POST(req: Request) {
       endsAt,
       managementToken: nanoid(24),
       notes: data.notes,
+      ...(charge
+        ? {
+            status: "PENDING_PAYMENT",
+            holdExpiresAt: new Date(Date.now() + PAYMENT_HOLD_MINUTES * 60_000),
+          }
+        : {}),
     },
   });
+
+  const whenLabel = formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone);
+
+  if (charge) {
+    // Truth comes from the webhook, not this response — notifications and
+    // the actual CONFIRMED transition happen there once Stripe confirms the
+    // charge succeeded (§4.1 Appendix: never trust client-reported payment).
+    const hold = await createPaymentIntentForAppointment({
+      appointmentId: appointment.id,
+      salonId: salon.id,
+      stripeAccountId: paymentCtx!.stripeAccountId!,
+      amountCents: charge.amountCents,
+      currency: paymentCtx!.currency,
+      kind: charge.kind,
+      postPaymentStatus: "CONFIRMED",
+    });
+    return NextResponse.json({
+      requiresPayment: true,
+      appointmentId: appointment.id,
+      managementToken: appointment.managementToken,
+      clientSecret: hold.clientSecret,
+      publishableKey: hold.publishableKey,
+      connectedAccountId: hold.connectedAccountId,
+      amountCents: hold.amountCents,
+      currency: hold.currency,
+      serviceName: service.name,
+      whenLabel,
+    } satisfies PublicBookingResponse);
+  }
 
   // Fire-and-forget notifications.
   sendNotifications(appointment.id, "CONFIRMATION").catch((err) =>
@@ -168,6 +222,6 @@ export async function POST(req: Request) {
     id: appointment.id,
     managementToken: appointment.managementToken,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone),
-  });
+    whenLabel,
+  } satisfies PublicBookingResponse);
 }

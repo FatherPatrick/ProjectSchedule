@@ -11,14 +11,16 @@ import {
   ChevronRight,
   Clock,
   Contact,
+  CreditCard,
   LayoutDashboard,
   Paintbrush,
+  Receipt,
   Sparkles,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const TABS = [
+const BASE_TABS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/admin/clients", label: "Clients", icon: Contact },
@@ -30,7 +32,18 @@ const TABS = [
   { href: "/admin/admins", label: "Admins", icon: Users },
 ];
 
-export default function AdminNav() {
+const PAYMENTS_TABS = [
+  { href: "/admin/payments", label: "Payments", icon: CreditCard },
+  { href: "/admin/billing", label: "Billing", icon: Receipt },
+];
+
+export default function AdminNav({
+  showPayments = false,
+}: {
+  /** Gated on `isStripePaymentsEnabled()` — the platform kill-switch. */
+  showPayments?: boolean;
+}) {
+  const TABS = showPayments ? [...BASE_TABS, ...PAYMENTS_TABS] : BASE_TABS;
   const pathname = usePathname() ?? "";
   const scrollerRef = useRef<HTMLElement>(null);
   // Whether there are more tabs hidden off the left/right edge. Drives the

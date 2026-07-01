@@ -13,30 +13,43 @@ booking revenue.
 | Billing page | **Salon's booking revenue dashboard** | Reporting over local `Payment` records: totals, per-service, payments list, refunds. Not platform/SaaS billing. |
 | Capture & refunds | **Charge at booking; auto-refund on timely cancel** | Immediate capture. Cancel inside the allowed window → auto-refund; late cancel / no-show → keep the deposit. Admin can also refund manually. |
 
-## ⚠️ Open decisions — confirm before implementing
+## ✅ Open decisions — resolved (2026-07-01)
 
-These were deliberately left open in this spec. **Resolve each with the project
-owner before writing code for the affected phase** — do not silently pick a
-default.
+These were deliberately left open in this spec and have now been decided and
+implemented. The project owner asked to move fast and land the whole rollout
+behind the still-disabled `STRIPE_PAYMENTS_ENABLED` flag rather than pause on
+each one individually — so each was resolved with the spec's own recommended
+default (noted below) instead of a fresh ask. Nothing here is customer-facing
+until the flag is turned on, so these are cheap to revisit before a real launch.
 
-- [ ] **Payment collection UI** (§4.1): embedded Stripe Payment Element
-  (recommended for the mobile-first single-page flow) vs Checkout redirect
-  (faster MVP). Hold/webhook logic is identical either way.
-- [ ] **Propose/approval flow charge timing** (§4.3): capture the deposit at
-  request time and auto-refund if the admin declines (recommended) vs capture
-  only after approval.
-- [ ] **Admin-created bookings** (§4.4): skip online card collection / mark
-  pay-in-person (v1 default) vs send a Stripe payment link for the deposit.
-- [ ] **Application fee on refunds** (§5.3): confirm exact policy — return the
-  platform fee on timely full refunds, forfeit (keep) it on no-shows/late
-  cancels.
-- [ ] **Sub-minimum deposits** (§8): bump up to the Stripe minimum charge vs
-  fall back to no-charge for that booking.
-- [ ] **"Net" revenue definition** (§9): subtract Stripe processing fees in the
-  dashboard's net figure, or only refunds + platform fee (processing fees aren't
-  cleanly known per charge without extra API calls).
-- [ ] **Mobile revenue view** (§9): include a read-only billing summary in the
-  Expo admin app in v1, or defer to phase 2.
+- [x] **Payment collection UI** (§4.1): **embedded Stripe Payment Element** —
+  the recommended option. Implemented in `src/app/book/PaymentStep.tsx`.
+- [x] **Propose/approval flow charge timing** (§4.3): **capture the deposit at
+  request time, auto-refund if declined** — the recommended option. A
+  never-confirmed (PENDING) appointment always refunds on cancel/decline,
+  regardless of who cancels it — see `cancelAppointment`'s refund policy.
+- [x] **Admin-created bookings** (§4.4): **v1 default — skip online card
+  collection**. `/admin/book` (`/api/admin/appointments`) was intentionally
+  left untouched; admin-created bookings never attempt a charge.
+- [x] **Application fee on refunds** (§5.3): **return the platform fee only on
+  a refund that fully zeroes out the payment**; a partial refund (or a
+  no-show/late-cancel forfeit, which never calls refund at all) keeps the
+  platform's cut. See `refundPayment`'s `isFullRefund` check.
+- [x] **Sub-minimum deposits** (§8): **bump up to the Stripe minimum charge**
+  (50¢) rather than skipping the charge — see `STRIPE_MIN_CHARGE_CENTS` in
+  `src/lib/domain/payments.ts`.
+- [x] **"Net" revenue definition** (§9): **refunds + platform fee only** — the
+  simpler option. Stripe's own processing fees aren't subtracted since
+  they're not cleanly knowable per charge without extra API calls.
+- [x] **Mobile revenue view** (§9): **deferred**. The Expo admin app has no
+  billing screen yet; `/admin/billing` is web-only for now.
+
+**Known follow-up, not yet built:** the admin cancel dialog's "also refund"
+checkbox (`CancelApptButton.tsx`) is unconditional — it doesn't yet check
+whether the appointment actually has a refundable payment before showing
+itself. Harmless (the refund is silently a no-op when there's nothing to
+refund) but slightly confusing UX; worth a follow-up pass once payments are
+live enough to notice in practice.
 
 ## Dependency
 
@@ -54,11 +67,11 @@ This feature ships behind a **global env kill-switch**, `STRIPE_PAYMENTS_ENABLED
 (`src/lib/env.ts`), separate from the per-salon `Salon.paymentsEnabled` DB
 toggle described in §3:
 
-- `STRIPE_PAYMENTS_ENABLED` gates the feature **platform-wide** — once later
-  phases build it out, this controls whether the Stripe admin nav/pages
-  render, the API routes respond, and the webhook is live. It defaults to
-  `"false"` everywhere, including production, so an unfinished rollout can
-  never accidentally go live.
+- `STRIPE_PAYMENTS_ENABLED` gates the feature **platform-wide** — it controls
+  whether the Stripe admin nav/pages render, the API routes attempt a charge,
+  and the webhook responds instead of 404ing. It defaults to `"false"`
+  everywhere, including production, so this fully-built feature stays inert
+  until someone deliberately turns it on.
 - `Salon.paymentsEnabled` (+ `paymentMode`) is the **per-salon** toggle an
   individual salon's admin controls once the platform-wide flag is on. It
   can only be `true` when `stripeChargesEnabled` is also true (§2.2).
@@ -66,27 +79,52 @@ toggle described in §3:
   that reads the env var. New code should gate on this helper, not on
   `process.env.STRIPE_PAYMENTS_ENABLED` directly.
 
-**To turn the flag on** (once enough of the phases below are built to be
-useful): set `STRIPE_PAYMENTS_ENABLED=true` plus `STRIPE_SECRET_KEY`,
-`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and
-`PLATFORM_FEE_PERCENT` in the target environment's `.env` (see
-`.env.example` for the full list with inline comments). In production,
-`collectProdProblems` in `src/lib/env.ts` will refuse to boot if the flag is
-`true` but any of those four are missing — so there's no way to half-enable
-it in prod. Flipping the flag on today (before Phase 2+ exist) is harmless
-but pointless: the schema is live, but nothing reads the flag yet.
+**Before turning the flag on for real**, all of the following need to happen
+— this is the complete pre-launch checklist, not just the env vars:
+
+1. **Create/confirm the platform's Stripe account** and enable Connect in
+   the Stripe Dashboard (Settings → Connect) if it isn't already.
+2. **Set the four required env vars** in the target environment: `STRIPE_SECRET_KEY`,
+   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+   `PLATFORM_FEE_PERCENT` (see `.env.example` for inline comments). In
+   production, `collectProdProblems` in `src/lib/env.ts` refuses to boot if
+   `STRIPE_PAYMENTS_ENABLED=true` and any of those four are missing — no way
+   to half-enable it in prod.
+3. **Register a webhook endpoint** in the Stripe Dashboard pointed at
+   `https://<your-domain>/api/stripe/webhook`, subscribed to: `account.updated`,
+   `payment_intent.succeeded`, `payment_intent.payment_failed`,
+   `charge.refunded`, `charge.dispute.created`. Copy its signing secret into
+   `STRIPE_WEBHOOK_SECRET`.
+4. **Add the hold-expiry cron** — already declared in `vercel.json`
+   (`/api/cron/expire-holds`); confirm it's actually scheduled once deployed
+   (Vercel Cron requires a paid plan for anything more frequent than daily).
+5. **Run the real Stripe test-mode flow end-to-end** before trusting it with
+   real money: connect a test Express account, complete onboarding with
+   Stripe's test data, book with a test card (success + a decline + a 3DS
+   card), confirm the webhook actually lands and flips the appointment,
+   cancel and confirm the auto-refund, and issue a manual refund from
+   `/admin/billing`. None of this is exercised by the unit test suite — it
+   only covers the code's logic in isolation, not real Stripe round-trips.
+6. **Set `STRIPE_PAYMENTS_ENABLED=true`** only after 1–5 above. Only then
+   does flipping it do anything meaningful — before that, the flag exists
+   but nothing customer-facing depends on it being on.
 
 **Progress against the rollout phases in §12:**
 
 | Phase | Status |
 | --- | --- |
 | 1. Schema + flag | ✅ Done — migration `prisma/migrations/20260701214626_add_stripe_payment_schema`, flag scaffolding in `src/lib/env.ts` / `src/lib/flags.ts`, busy-set fix (§1.4) live in all 5 conflict-check call sites. |
-| 2. Connect onboarding | Not started |
-| 3. Admin config | Not started |
-| 4. Booking + payment | Not started |
-| 5. Refunds + sweeper | Not started |
-| 6. Billing dashboard | Not started |
-| 7. Hardening | Not started |
+| 2. Connect onboarding | ✅ Done — `src/lib/domain/stripeConnect.ts` (create/reuse Express account, Account Link, Express login link), `/api/stripe/webhook` (`account.updated` sync + auto-disable `paymentsEnabled` on charges-disabled), `/admin/payments` status page, nav tab gated on `isStripePaymentsEnabled()`. |
+| 3. Admin config | ✅ Done — `src/lib/domain/payments.ts` (`amountForBooking`, `getPaymentsConfig`/`updatePaymentsConfig`), payment-mode + deposit form on `/admin/payments`, server-side guard against enabling before `stripeChargesEnabled`. |
+| 4. Booking + payment | ✅ Done — embedded Payment Element (`src/app/book/PaymentStep.tsx`), PI creation on the connected account in both `/api/appointments` and `/api/appointments/propose`, `payment_intent.*` webhook handling (`src/lib/domain/paymentWebhooks.ts`), `PENDING_PAYMENT` hold + confirmation-on-webhook, notifications deferred to post-payment for the paid path. |
+| 5. Refunds + sweeper | ✅ Done — `refundPayment` (auto-refund on timely client cancel, admin-choice refund on admin cancel, always-refund on decline of a never-confirmed request), `charge.refunded`/`charge.dispute.created` webhook handling, hold-expiry cron at `/api/cron/expire-holds`. |
+| 6. Billing dashboard | ✅ Done — `/admin/billing` (`src/lib/domain/billing.ts`): summary cards, per-service breakdown, payments table with manual refund, payouts link, Connect health banner. |
+| 7. Hardening | Partial — see "Open decisions — resolved" above for what's deliberately deferred (mobile revenue view) or a known follow-up (admin cancel refund checkbox). Full test suite covers the domain logic and route wiring; real Stripe test-mode end-to-end testing (test cards, 3DS, actual webhook delivery) still needs to happen manually once test API keys are configured — that can't be exercised from unit tests. |
+
+All seven phases are implemented behind `STRIPE_PAYMENTS_ENABLED` (still
+`"false"` by default everywhere) — turning the flag on is now a real,
+end-to-end payments launch, not a partial rollout. Run through the
+numbered pre-launch checklist above first.
 
 ## Charge model: direct charges on the connected account
 
@@ -537,19 +575,23 @@ access token already carries `salonId`); refunds can stay web-only initially.
    `PENDING_PAYMENT` status + `holdExpiresAt`, busy-set rule (§1.4). Ship inert
    (no payments enabled). ✅ **Done** — see "Feature flag & rollout status" above.
 2. **Connect onboarding** — create account, Account Links, `account.updated`
-   webhook, status display in admin. No charges yet.
+   webhook, status display in admin. No charges yet. ✅ **Done** — see
+   "Feature flag & rollout status" above.
 3. **Admin config** — payments toggle + mode + deposit config + `amountForBooking`
-   helper, gated on charges-enabled.
+   helper, gated on charges-enabled. ✅ **Done**.
 4. **Booking + payment** — Payment Element flow, PI creation on connected
    account, `payment_intent.*` webhooks, hold + confirmation-on-success,
-   notifications moved post-payment. The behavior-visible launch.
+   notifications moved post-payment. The behavior-visible launch. ✅ **Done**.
 5. **Refunds + sweeper** — auto-refund on timely cancel, manual refund, hold
-   expiry job, `charge.refunded`/`dispute` handling.
+   expiry job, `charge.refunded`/`dispute` handling. ✅ **Done**.
 6. **Billing dashboard** — revenue reporting + payouts widget + refund UI.
+   ✅ **Done**.
 7. **Hardening** — full test matrix, dispute handling, mobile revenue view.
+   Partial — mobile revenue view deferred, real Stripe test-mode QA still
+   outstanding (see the phase table above).
 
-Phase 1 is safe to ship behind the disabled toggle. The client-visible cutover is
-phase 4.
+All phases are implemented behind the disabled toggle — see "Feature flag &
+rollout status" above for what turning it on for real requires.
 
 ---
 

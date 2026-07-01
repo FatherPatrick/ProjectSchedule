@@ -35,6 +35,13 @@ vi.mock("@/lib/integrations/notifications", () => ({
 vi.mock("@/lib/integrations/adminSms", () => ({
   notifyAdminsOfBooking: vi.fn(),
 }));
+// The Stripe payment branch is covered separately in
+// appointmentsPayment.test.ts — default the platform flag off here so these
+// pre-existing tests exercise the unpaid path without touching real env vars.
+const isStripePaymentsEnabledMock = vi.hoisted(() => vi.fn(() => false));
+vi.mock("@/lib/flags", () => ({
+  isStripePaymentsEnabled: isStripePaymentsEnabledMock,
+}));
 
 import { POST } from "@/app/api/appointments/route";
 import { _resetCaptchaDedupeForTests } from "@/lib/integrations/captcha";

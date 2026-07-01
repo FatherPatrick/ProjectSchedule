@@ -217,6 +217,28 @@ export const pushRegisterSchema = z.object({
 export type PushRegister = z.infer<typeof pushRegisterSchema>;
 
 /* -------------------------------------------------------------------------- */
+/*                            Payments config (§3)                            */
+/* -------------------------------------------------------------------------- */
+
+export const paymentsConfigJsonSchema = z
+  .object({
+    paymentsEnabled: z.boolean(),
+    paymentMode: z.enum(["NONE", "DEPOSIT", "FULL"]),
+    depositType: z.enum(["FIXED", "PERCENT"]),
+    depositCents: priceCentsField.optional(),
+    depositPercent: z.number().int().min(1).max(100).optional(),
+  })
+  .refine(
+    (v) =>
+      v.paymentMode !== "DEPOSIT" ||
+      (v.depositType === "FIXED"
+        ? (v.depositCents ?? 0) > 0
+        : v.depositPercent != null),
+    { message: "Enter a deposit amount." }
+  );
+export type PaymentsConfigUpdate = z.infer<typeof paymentsConfigJsonSchema>;
+
+/* -------------------------------------------------------------------------- */
 /*                  Re-exports for the FormData layer (./admin.ts)            */
 /* -------------------------------------------------------------------------- */
 

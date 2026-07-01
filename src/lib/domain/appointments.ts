@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { sendNotifications } from "../integrations/notifications";
 import { reportError } from "../observability/reportError";
 import { CANCELLATION_WINDOW_HOURS } from "../config";
+import { refundPayment } from "./payments";
 
 /**
  * Result type for appointment state-change operations. Lets callers translate
@@ -136,6 +137,14 @@ export interface CancelAppointmentOptions {
   byAdmin: boolean;
   /** Optional message included in the cancellation email/SMS (admin only). */
   note?: string;
+  /**
+   * Admin-only refund choice for a paid appointment (docs/STRIPE_SPEC.md
+   * §5.3: "admin cancels choose refund-or-keep"). Ignored for client
+   * self-cancel, which always auto-refunds — a client-initiated cancel only
+   * reaches this function when it's within the allowed window, i.e. timely
+   * by definition.
+   */
+  refund?: boolean;
 }
 
 /**
@@ -173,6 +182,34 @@ export async function cancelAppointment(
     where: { id },
     data: { status: "CANCELLED" },
   });
+
+  // Refund policy (§5.3, §4.3):
+  //  - Never-confirmed (PENDING) appointments always refund — the salon
+  //    never committed to render the service, whether the client withdrew
+  //    the request or the admin declined it (§4.3's "auto-refund if
+  //    declined" locked default).
+  //  - A client self-cancel that reaches this point is always a timely
+  //    cancel of a CONFIRMED booking (a late one was already rejected
+  //    above), so auto-refund.
+  //  - An admin cancelling a CONFIRMED booking keeps the payment by default
+  //    (no-show / late-cancel forfeit) unless they explicitly opt in.
+  const shouldRefund = !wasConfirmed || !opts.byAdmin || opts.refund === true;
+  if (shouldRefund) {
+    const payment = await prisma.payment.findFirst({
+      where: { appointmentId: id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (payment) {
+      const result = await refundPayment(salonId, payment.id);
+      if (!result.ok) {
+        reportError(new Error(result.error), {
+          where: "appointments.cancel.refund",
+          appointmentId: id,
+          paymentId: payment.id,
+        });
+      }
+    }
+  }
 
   // Notify the client whenever we cancel a confirmed appointment, or whenever
   // the admin explicitly attached a message (e.g. when declining a pending

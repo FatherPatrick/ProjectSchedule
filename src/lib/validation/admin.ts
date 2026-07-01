@@ -30,8 +30,10 @@ import {
   appearanceUpdateSchema,
   businessHoursJsonSaveSchema,
   businessHoursScheduleJsonCreateSchema,
+  paymentsConfigJsonSchema,
   serviceJsonCreateSchema,
   type AppearanceUpdate,
+  type PaymentsConfigUpdate,
   type ServiceJsonCreate,
 } from "./adminJson";
 
@@ -241,6 +243,34 @@ export function parseAppearanceUpdateForm(fd: FormData): AppearanceUpdate {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                            Payments config (§3)                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The form always posts a `depositDollars` and `depositPercent` field
+ * regardless of which `depositType` is selected (the inactive one is just
+ * hidden via CSS/JS) — only the active type's value is forwarded into the
+ * canonical schema, which then clears the other in the DB write.
+ */
+export function parsePaymentsConfigForm(fd: FormData): PaymentsConfigUpdate {
+  const depositType = fd.get("depositType") === "PERCENT" ? "PERCENT" : "FIXED";
+  const depositDollars = Number(fd.get("depositDollars") ?? 0);
+  const depositPercent = Number(fd.get("depositPercent") ?? 0);
+
+  return paymentsConfigJsonSchema.parse({
+    paymentsEnabled: fd.get("paymentsEnabled") === "on",
+    paymentMode: fd.get("paymentMode") ?? "NONE",
+    depositType,
+    depositCents:
+      depositType === "FIXED" && depositDollars > 0
+        ? Math.round(depositDollars * 100)
+        : undefined,
+    depositPercent:
+      depositType === "PERCENT" && depositPercent > 0 ? depositPercent : undefined,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
 /*                       Admin appointment cancel body                        */
 /* -------------------------------------------------------------------------- */
 
@@ -248,6 +278,8 @@ export function parseAppearanceUpdateForm(fd: FormData): AppearanceUpdate {
 export const appointmentCancelBodySchema = z
   .object({
     message: z.string().trim().max(280).optional(),
+    /** Refund any payment collected for this appointment (docs/STRIPE_SPEC.md §5.3). */
+    refund: z.boolean().optional(),
   })
   .partial();
 

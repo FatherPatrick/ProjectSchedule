@@ -135,6 +135,35 @@ export type BookingCreatedResponse = {
   whenLabel: string;
 };
 
+/**
+ * Returned by the public booking endpoints instead of {@link BookingCreatedResponse}
+ * when the salon requires online payment (docs/STRIPE_SPEC.md §4.1). The
+ * appointment exists as a `PENDING_PAYMENT` hold; the client must confirm the
+ * PaymentIntent with `clientSecret` before it becomes a real booking — the
+ * webhook (not this response) is what actually confirms it.
+ */
+export type BookingRequiresPaymentResponse = {
+  requiresPayment: true;
+  appointmentId: string;
+  managementToken: string;
+  clientSecret: string;
+  publishableKey: string;
+  connectedAccountId: string;
+  amountCents: number;
+  currency: string;
+  serviceName: string;
+  whenLabel: string;
+};
+
+export type PublicBookingResponse = BookingCreatedResponse | BookingRequiresPaymentResponse;
+
+/** Polled after payment confirmation to learn whether the webhook has landed yet. */
+export type AppointmentStatusResponse = {
+  status: "PENDING_PAYMENT" | "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+  serviceName: string;
+  whenLabel: string;
+};
+
 // ---------------------------------------------------------------------------
 // Blackouts
 // ---------------------------------------------------------------------------

@@ -15,6 +15,14 @@ import {
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
 import { getPublicSalon } from "@/lib/domain/salon";
+import { isStripePaymentsEnabled } from "@/lib/flags";
+import {
+  amountForBooking,
+  createPaymentIntentForAppointment,
+  getBookingPaymentContext,
+  PAYMENT_HOLD_MINUTES,
+} from "@/lib/domain/payments";
+import type { PublicBookingResponse } from "@/lib/api-types";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 
@@ -122,6 +130,17 @@ export async function POST(req: Request) {
     },
   });
 
+  // Only attempt a charge when the platform-wide kill-switch is on — a
+  // stale per-salon `paymentsEnabled` value must never take effect while
+  // Stripe is off platform-wide.
+  const paymentCtx = isStripePaymentsEnabled()
+    ? await getBookingPaymentContext(salon.id)
+    : null;
+  const charge =
+    paymentCtx?.stripeAccountId && paymentCtx.stripeChargesEnabled
+      ? amountForBooking(paymentCtx, service)
+      : null;
+
   const appointment = await prisma.appointment.create({
     data: {
       salonId: salon.id,
@@ -129,19 +148,51 @@ export async function POST(req: Request) {
       clientId: client.id,
       startsAt,
       endsAt,
-      status: "PENDING",
+      status: charge ? "PENDING_PAYMENT" : "PENDING",
       managementToken: nanoid(24),
       notes: data.notes,
+      ...(charge
+        ? { holdExpiresAt: new Date(Date.now() + PAYMENT_HOLD_MINUTES * 60_000) }
+        : {}),
     },
   });
 
-  const whenLabel = formatBiz(startsAt, "EEE MMM d, h:mm a", salon.timezone);
+  const shortWhenLabel = formatBiz(startsAt, "EEE MMM d, h:mm a", salon.timezone);
+  const whenLabel = formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone);
+
+  if (charge) {
+    // The deposit is captured at request time (§4.3, locked default): the
+    // slot is genuinely held by money, and it's auto-refunded if the admin
+    // declines. Admin alerts + the PENDING transition happen via the
+    // webhook once Stripe confirms the charge succeeded, not here.
+    const hold = await createPaymentIntentForAppointment({
+      appointmentId: appointment.id,
+      salonId: salon.id,
+      stripeAccountId: paymentCtx!.stripeAccountId!,
+      amountCents: charge.amountCents,
+      currency: paymentCtx!.currency,
+      kind: charge.kind,
+      postPaymentStatus: "PENDING",
+    });
+    return NextResponse.json({
+      requiresPayment: true,
+      appointmentId: appointment.id,
+      managementToken: appointment.managementToken,
+      clientSecret: hold.clientSecret,
+      publishableKey: hold.publishableKey,
+      connectedAccountId: hold.connectedAccountId,
+      amountCents: hold.amountCents,
+      currency: hold.currency,
+      serviceName: service.name,
+      whenLabel,
+    } satisfies PublicBookingResponse);
+  }
 
   // Notify admins on their phones (fire-and-forget).
   pushToAdmins(
     {
       title: "New appointment request",
-      body: `${data.name} · ${service.name} · ${whenLabel}`,
+      body: `${data.name} · ${service.name} · ${shortWhenLabel}`,
       data: { appointmentId: appointment.id, kind: "PENDING_REQUEST" },
     },
     { appointmentId: appointment.id, salonId: salon.id }
@@ -153,13 +204,13 @@ export async function POST(req: Request) {
     salonName: salon.name,
     clientName: data.name,
     serviceName: service.name,
-    whenLabel,
+    whenLabel: shortWhenLabel,
   });
 
   return NextResponse.json({
     id: appointment.id,
     managementToken: appointment.managementToken,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone),
-  });
+    whenLabel,
+  } satisfies PublicBookingResponse);
 }

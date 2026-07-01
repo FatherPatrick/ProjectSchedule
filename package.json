@@ -30,6 +30,8 @@
     "@auth/prisma-adapter": "^2.11.2",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.3",
+    "@stripe/react-stripe-js": "^6.7.0",
+    "@stripe/stripe-js": "^9.9.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.5.0",
     "clsx": "^2.1.1",
@@ -45,6 +47,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.74.0",
     "resend": "^6.12.2",
+    "stripe": "^22.3.0",
     "tailwind-merge": "^3.5.0",
     "twilio": "^6.0.0",
     "zod": "^4.4.1"

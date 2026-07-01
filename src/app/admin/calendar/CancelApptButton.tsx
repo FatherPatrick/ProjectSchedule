@@ -18,6 +18,7 @@ export function CancelApptButton({
   const { pending, error: err, run, clearError } = useAdminAction();
   const [showForm, setShowForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [refund, setRefund] = useState(false);
 
   const isDecline = label === "Decline";
 
@@ -28,13 +29,17 @@ export function CancelApptButton({
         fetch(`/api/admin/appointments/${id}/cancel`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(note ? { message: note } : {}),
+          body: JSON.stringify({
+            ...(note ? { message: note } : {}),
+            ...(refund ? { refund: true } : {}),
+          }),
         }),
       success: isDecline ? "Request declined." : "Appointment cancelled.",
       failure: "Could not cancel.",
       onSuccess: () => {
         setShowForm(false);
         setMessage("");
+        setRefund(false);
       },
     });
   }
@@ -62,6 +67,18 @@ export function CancelApptButton({
             {message.trim().length}/280
           </span>
         </label>
+        {!isDecline && (
+          <label className="flex w-full items-center gap-1.5 text-xs text-red-900">
+            <input
+              type="checkbox"
+              checked={refund}
+              onChange={(e) => setRefund(e.target.checked)}
+              disabled={pending}
+              className="h-3.5 w-3.5 rounded border-red-300"
+            />
+            Also refund any payment collected for this appointment
+          </label>
+        )}
         <div className="flex gap-2">
           <button
             type="button"

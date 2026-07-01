@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
+import { isStripePaymentsEnabled } from "@/lib/flags";
 import AdminNav from "./AdminNav";
 import { AdminToaster } from "./AdminToaster";
 
@@ -23,7 +24,7 @@ export default async function AdminLayout({
     <div className="space-y-6">
       <AdminToaster />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <AdminNav />
+        <AdminNav showPayments={isStripePaymentsEnabled()} />
         <form
           action={async () => {
             "use server";
