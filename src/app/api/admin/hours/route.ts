@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { businessHoursJsonSaveSchema } from "@/lib/validation/adminJson";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import type { HoursResponse } from "@/lib/api-types";
 
 /**
  * GET — returns all 7 weekly default rows (creating any missing rows on the
  * fly is the responsibility of the caller; this endpoint just reads).
  */
-export const GET = withAdmin(async () => {
-  const salonId = await getAdminSalonId();
+export const GET = withAdmin(async (req) => {
+  const { salonId } = (await requireAdminSalon(req))!;
   const rows = await prisma.businessHours.findMany({
     where: { salonId },
     orderBy: { dayOfWeek: "asc" },
@@ -32,8 +32,8 @@ export const GET = withAdmin(async () => {
 /**
  * PUT — replace all 7 weekly defaults atomically.
  */
-export const PUT = withAdminJson(businessHoursJsonSaveSchema, async (data) => {
-  const salonId = await getAdminSalonId();
+export const PUT = withAdminJson(businessHoursJsonSaveSchema, async (data, req) => {
+  const { salonId } = (await requireAdminSalon(req))!;
 
   for (const d of data.days) {
     if (d.closeMin < d.openMin) {

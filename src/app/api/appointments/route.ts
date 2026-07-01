@@ -19,7 +19,7 @@ import {
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
 import { notifyAdminsOfBooking } from "@/lib/integrations/adminSms";
-import { getSalonFromRequest } from "@/lib/domain/salon";
+import { getPublicSalon } from "@/lib/domain/salon";
 
 // First-pass anti-abuse for the public booking endpoint. A captcha
 // (Turnstile / hCaptcha) is the long-term answer — see README TODO.
@@ -27,10 +27,9 @@ const BOOKING_IP_LIMIT = 5;
 const BOOKING_WINDOW_MS = 10 * 60_000;
 
 export async function POST(req: Request) {
-  const salon = await getSalonFromRequest(req);
-  if (!salon) {
-    return NextResponse.json({ error: "Salon not found." }, { status: 404 });
-  }
+  const result = await getPublicSalon(req);
+  if (!result.ok) return result.response;
+  const { salon } = result;
 
   const ip = getClientIp(req);
   const ipCheck = checkRateLimit({
@@ -154,15 +153,17 @@ export async function POST(req: Request) {
   // Alert admins (those who opted in) that a booking came in.
   notifyAdminsOfBooking({
     kind: "booked",
+    salonId: salon.id,
+    salonName: salon.name,
     clientName: data.name,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEE MMM d, h:mm a"),
+    whenLabel: formatBiz(startsAt, "EEE MMM d, h:mm a", salon.timezone),
   });
 
   return NextResponse.json({
     id: appointment.id,
     managementToken: appointment.managementToken,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a"),
+    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone),
   });
 }

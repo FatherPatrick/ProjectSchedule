@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { BUSINESS_NAME } from "@/lib/config";
+import { salonAppUrl } from "@/lib/config";
 
 function toIcalDate(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
@@ -18,27 +18,30 @@ export async function GET(
 
   const appt = await prisma.appointment.findUnique({
     where: { managementToken: token },
-    include: { service: true },
+    include: {
+      service: true,
+      salon: { select: { name: true, slug: true } },
+    },
   });
 
   if (!appt) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const manageUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/appointments/${token}`;
+  const manageUrl = `${salonAppUrl(appt.salon.slug)}/appointments/${token}`;
   const uid = `${appt.id}@projectschedule`;
 
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    `PRODID:-//${BUSINESS_NAME}//Appointment Scheduler//EN`,
+    `PRODID:-//${escapeIcal(appt.salon.name)}//Appointment Scheduler//EN`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTART:${toIcalDate(appt.startsAt)}`,
     `DTEND:${toIcalDate(appt.endsAt)}`,
-    `SUMMARY:${escapeIcal(`${appt.service.name} at ${BUSINESS_NAME}`)}`,
+    `SUMMARY:${escapeIcal(`${appt.service.name} at ${appt.salon.name}`)}`,
     `DESCRIPTION:${escapeIcal(`Manage or cancel your appointment: ${manageUrl}`)}`,
     `DTSTAMP:${toIcalDate(new Date())}`,
     "END:VEVENT",

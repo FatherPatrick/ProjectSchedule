@@ -25,8 +25,6 @@ const schema = z.object({
   deviceLabel: z.string().max(64).optional(),
 });
 
-// Twilio Verify allows ~5 attempts per code; we bound the surrounding
-// brute-force surface here too. Per-phone is the tight one.
 const IP_LIMIT = 10;
 const PHONE_LIMIT = 5;
 const WINDOW_MS = 10 * 60_000;
@@ -34,7 +32,7 @@ const WINDOW_MS = 10 * 60_000;
 /**
  * Verifies an OTP and, on success, creates a new MobileSession and returns:
  *   { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt,
- *     user: { id, role } }
+ *     user: { id, role, salonId } }
  *
  * The refresh token is shown only once; only its hash is persisted.
  */
@@ -59,8 +57,16 @@ export async function POST(req: Request) {
   }
 
   const phone = toE164(parsed.data.phone);
-  if (!phone || !(await isAdminPhone(phone))) {
-    // Same generic 401 whether non-admin or wrong code.
+  if (!phone) {
+    return NextResponse.json({ error: "Invalid code." }, { status: 401 });
+  }
+
+  // Resolve salon from the subdomain — required for host-scoped admin check.
+  const slug = req.headers.get("x-salon-slug");
+  const salon = slug
+    ? await prisma.salon.findUnique({ where: { slug }, select: { id: true } })
+    : null;
+  if (!salon || !(await isAdminPhone(salon.id, phone))) {
     return NextResponse.json({ error: "Invalid code." }, { status: 401 });
   }
 
@@ -80,17 +86,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid code." }, { status: 401 });
   }
 
-  // Upsert admin user keyed by phone (mirrors src/auth.ts).
+  // Upsert admin user keyed by phone; set salonId so the token carries it.
   const existing = await prisma.user.findFirst({ where: { phone } });
   const user = existing
     ? await prisma.user.update({
         where: { id: existing.id },
-        data: { role: "ADMIN" },
+        data: { role: "ADMIN", salonId: salon.id },
       })
     : await prisma.user.create({
         data: {
           phone,
           role: "ADMIN",
+          salonId: salon.id,
           email: `${phone.replace(/\D/g, "")}@phone.local`,
         },
       });
@@ -105,8 +112,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // Cap the number of live sessions per admin to bound the blast-radius of
-  // a leaked refresh token. Revoke oldest non-revoked sessions beyond the cap.
   const MAX_LIVE_SESSIONS = 10;
   const live = await prisma.mobileSession.findMany({
     where: { userId: user.id, revokedAt: null },
@@ -125,6 +130,7 @@ export async function POST(req: Request) {
     userId: user.id,
     sessionId: session.id,
     role: "ADMIN",
+    salonId: salon.id,
   });
 
   return NextResponse.json({
@@ -133,6 +139,6 @@ export async function POST(req: Request) {
     accessTokenTtlSeconds: ACCESS_TOKEN_TTL_SECONDS,
     refreshToken,
     refreshTokenExpiresAt: session.expiresAt.toISOString(),
-    user: { id: user.id, role: "ADMIN" as const },
+    user: { id: user.id, role: "ADMIN" as const, salonId: salon.id },
   } satisfies OtpVerifyResult);
 }

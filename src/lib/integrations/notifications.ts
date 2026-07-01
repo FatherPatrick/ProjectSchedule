@@ -2,22 +2,24 @@ import { prisma } from "../db/prisma";
 import { sendEmail } from "./email";
 import { sendSMS, withSmsFooter } from "./sms";
 import { formatBiz } from "../timezone";
-import { APP_URL, BUSINESS_NAME } from "../config";
+import { salonAppUrl } from "../config";
 import type {
   Appointment,
   Client,
   Service,
+  Salon,
   NotificationKind,
 } from "@prisma/client";
 
-type Bundle = Appointment & { client: Client; service: Service };
+type SalonFields = Pick<Salon, "name" | "instagram" | "slug" | "timezone">;
+type Bundle = Appointment & { client: Client; service: Service; salon: SalonFields };
 
-function manageUrl(token: string) {
-  return `${APP_URL}/appointments/${token}`;
+function manageUrl(slug: string, token: string) {
+  return `${salonAppUrl(slug)}/appointments/${token}`;
 }
 
-function rebookUrl(serviceId: string) {
-  return `${APP_URL}/book?serviceId=${serviceId}`;
+function rebookUrl(slug: string, serviceId: string) {
+  return `${salonAppUrl(slug)}/book?serviceId=${serviceId}`;
 }
 
 /** Format a Date to iCal UTC string: YYYYMMDDTHHmmssZ */
@@ -26,7 +28,7 @@ function toIcalDate(d: Date): string {
 }
 
 function googleCalendarUrl(b: Bundle, manageLink: string): string {
-  const title = `${b.service.name} at ${BUSINESS_NAME}`;
+  const title = `${b.service.name} at ${b.salon.name}`;
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: title,
@@ -36,15 +38,13 @@ function googleCalendarUrl(b: Bundle, manageLink: string): string {
   return `https://calendar.google.com/calendar/render?${params}`;
 }
 
-function icalDownloadUrl(token: string): string {
-  return `${APP_URL}/api/appointments/${token}/ical`;
+function icalDownloadUrl(slug: string, token: string): string {
+  return `${salonAppUrl(slug)}/api/appointments/${token}/ical`;
 }
 
-function fmtWhen(d: Date) {
-  return formatBiz(d, "EEEE, MMM d 'at' h:mm a");
+function fmtWhen(d: Date, timezone: string) {
+  return formatBiz(d, "EEEE, MMM d 'at' h:mm a", timezone);
 }
-
-const INSTAGRAM_HANDLE = "@virgonailz";
 
 function escapeHtml(s: string) {
   return s.replace(/[<>&]/g, (c) =>
@@ -59,14 +59,17 @@ function escapeHtml(s: string) {
  * works, and reuses the same body for email (html + text) and SMS.
  */
 function buildClientMessage(b: Bundle, lead: string) {
-  const url = manageUrl(b.managementToken);
+  const url = manageUrl(b.salon.slug, b.managementToken);
   const gcalUrl = googleCalendarUrl(b, url);
-  const icalUrl = icalDownloadUrl(b.managementToken);
-  const reUrl = rebookUrl(b.service.id);
-  const greeting = `Hi there from ${BUSINESS_NAME}!`;
+  const icalUrl = icalDownloadUrl(b.salon.slug, b.managementToken);
+  const reUrl = rebookUrl(b.salon.slug, b.service.id);
+  const greeting = `Hi there from ${b.salon.name}!`;
+  const instagramLine = b.salon.instagram
+    ? `If you have any questions please send a DM to our Instagram: ${b.salon.instagram}`
+    : `If you have any questions, please reach out and we'll be happy to help.`;
   const body = [
     "Please remember our cancellation policy: let us know at least 24 hours in advance if you need to cancel or reschedule, or a $20 deposit will be required for future bookings.",
-    `If you have any questions please send a DM to my Instagram: ${INSTAGRAM_HANDLE}`,
+    instagramLine,
     "Due to limited space, please do not bring children or other guests.",
     "Upon arrival, kindly send me a message to let me know you've arrived. Please remain in your vehicle until I respond and let you know I'm ready for you.",
   ];
@@ -107,7 +110,7 @@ function buildClientMessage(b: Bundle, lead: string) {
 }
 
 function confirmationCopy(b: Bundle) {
-  const when = fmtWhen(b.startsAt);
+  const when = fmtWhen(b.startsAt, b.salon.timezone);
   return {
     subject: `Confirmed: ${b.service.name} on ${when}`,
     ...buildClientMessage(
@@ -118,7 +121,7 @@ function confirmationCopy(b: Bundle) {
 }
 
 function reminderCopy(b: Bundle) {
-  const when = fmtWhen(b.startsAt);
+  const when = fmtWhen(b.startsAt, b.salon.timezone);
   return {
     subject: `Reminder: ${b.service.name} on ${when}`,
     ...buildClientMessage(
@@ -129,8 +132,8 @@ function reminderCopy(b: Bundle) {
 }
 
 function reviewRequestCopy(b: Bundle, reviewUrl: string) {
-  const when = fmtWhen(b.startsAt);
-  const reUrl = rebookUrl(b.service.id);
+  const when = fmtWhen(b.startsAt, b.salon.timezone);
+  const reUrl = rebookUrl(b.salon.slug, b.service.id);
   const text = [
     `Hi ${b.client.name}!`,
     `Thank you so much for your ${b.service.name} appointment on ${when}. We hope you love your nails!`,
@@ -139,7 +142,7 @@ function reviewRequestCopy(b: Bundle, reviewUrl: string) {
     `We'd love to see you again soon. Book your next appointment here:`,
     reUrl,
     `Xoxo💋`,
-    BUSINESS_NAME,
+    b.salon.name,
   ].join("\n\n");
 
   const html =
@@ -147,15 +150,15 @@ function reviewRequestCopy(b: Bundle, reviewUrl: string) {
     `<p>Thank you so much for your <strong>${escapeHtml(b.service.name)}</strong> appointment on ${escapeHtml(when)}. We hope you love your nails!</p>` +
     `<p>If you have a moment, we'd love it if you left us a review — it helps us so much: <a href="${reviewUrl}">Leave a review</a></p>` +
     `<p>We'd love to see you again soon. <a href="${reUrl}">Book your next appointment</a></p>` +
-    `<p>Xoxo💋<br/>${escapeHtml(BUSINESS_NAME)}</p>`;
+    `<p>Xoxo💋<br/>${escapeHtml(b.salon.name)}</p>`;
 
   const sms =
-    `${BUSINESS_NAME}: Thanks for your ${b.service.name} on ${when}! ` +
+    `${b.salon.name}: Thanks for your ${b.service.name} on ${when}! ` +
     `Would you mind leaving us a review? ${reviewUrl} ` +
     `Book again: ${reUrl}`;
 
   return {
-    subject: `Thank you for visiting ${BUSINESS_NAME}!`,
+    subject: `Thank you for visiting ${b.salon.name}!`,
     text,
     html,
     sms,
@@ -163,10 +166,10 @@ function reviewRequestCopy(b: Bundle, reviewUrl: string) {
 }
 
 function cancellationCopy(b: Bundle, note?: string) {
-  const when = fmtWhen(b.startsAt);
-  const noteBlockText = note ? `\n\nA note from ${BUSINESS_NAME}:\n${note}` : "";
+  const when = fmtWhen(b.startsAt, b.salon.timezone);
+  const noteBlockText = note ? `\n\nA note from ${b.salon.name}:\n${note}` : "";
   const noteBlockHtml = note
-    ? `<p><strong>A note from ${BUSINESS_NAME}:</strong><br/>${note
+    ? `<p><strong>A note from ${b.salon.name}:</strong><br/>${note
         .split(/\n+/)
         .map((line) => line.replace(/[<>&]/g, (c) =>
           c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"
@@ -178,9 +181,16 @@ function cancellationCopy(b: Bundle, note?: string) {
     subject: `Cancelled: ${b.service.name} on ${when}`,
     text: `Your ${b.service.name} appointment ${when} has been cancelled.${noteBlockText}`,
     html: `<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
-    sms: `${BUSINESS_NAME}: your ${b.service.name} appointment ${when} has been cancelled.${noteBlockSms}`,
+    sms: `${b.salon.name}: your ${b.service.name} appointment ${when} has been cancelled.${noteBlockSms}`,
   };
 }
+
+const SALON_SELECT = {
+  name: true,
+  instagram: true,
+  slug: true,
+  timezone: true,
+} as const;
 
 /**
  * Send a review request to the client for a completed appointment.
@@ -192,7 +202,7 @@ export async function sendReviewRequest(
 ) {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    include: { client: true, service: true },
+    include: { client: true, service: true, salon: { select: SALON_SELECT } },
   });
   if (!appt) return;
 
@@ -250,7 +260,7 @@ export async function sendNotifications(
 ) {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    include: { client: true, service: true },
+    include: { client: true, service: true, salon: { select: SALON_SELECT } },
   });
   if (!appt) return;
 

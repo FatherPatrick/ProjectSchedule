@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       userId: true,
       revokedAt: true,
       expiresAt: true,
-      user: { select: { role: true } },
+      user: { select: { role: true, salonId: true } },
     },
   });
 
@@ -42,13 +42,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid token." }, { status: 401 });
   }
   if (session.revokedAt) {
-    // Token reuse — be conservative and ensure it stays revoked.
     return NextResponse.json({ error: "Invalid token." }, { status: 401 });
   }
   if (session.expiresAt < new Date()) {
     return NextResponse.json({ error: "Expired." }, { status: 401 });
   }
-  if (session.user.role !== "ADMIN") {
+  if (session.user.role !== "ADMIN" || !session.user.salonId) {
     await prisma.mobileSession.update({
       where: { id: session.id },
       data: { revokedAt: new Date() },
@@ -56,8 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  // Rotate: revoke the old session row and create a new one. We mint a new
-  // session id so the access-token `sid` claim points at the fresh row.
+  // Rotate: revoke the old session row and create a new one.
   const newRefresh = generateRefreshToken();
   const [, fresh] = await prisma.$transaction([
     prisma.mobileSession.update({
@@ -77,6 +75,7 @@ export async function POST(req: Request) {
     userId: session.userId,
     sessionId: fresh.id,
     role: "ADMIN",
+    salonId: session.user.salonId,
   });
 
   return NextResponse.json({

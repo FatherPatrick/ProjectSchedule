@@ -14,6 +14,8 @@ export async function POST(
     select: {
       id: true,
       startsAt: true,
+      salonId: true,
+      salon: { select: { timezone: true } },
       client: { select: { name: true } },
       service: { select: { name: true } },
     },
@@ -21,7 +23,7 @@ export async function POST(
   if (!appt) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
-  const result = await cancelAppointment(appt.id, { byAdmin: false });
+  const result = await cancelAppointment(appt.salonId, appt.id, { byAdmin: false });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
@@ -29,10 +31,10 @@ export async function POST(
   pushToAdmins(
     {
       title: "Appointment cancelled",
-      body: `${appt.client.name} · ${appt.service.name} · ${formatBiz(appt.startsAt, "EEE MMM d, h:mm a")}`,
+      body: `${appt.client.name} · ${appt.service.name} · ${formatBiz(appt.startsAt, "EEE MMM d, h:mm a", appt.salon.timezone)}`,
       data: { appointmentId: appt.id, kind: "CLIENT_CANCELLED" },
     },
-    { appointmentId: appt.id }
+    { appointmentId: appt.id, salonId: appt.salonId }
   );
 
   return NextResponse.json({ ok: true });

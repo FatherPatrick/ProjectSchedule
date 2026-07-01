@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { getAvailableSlots } from "@/lib/domain/availability";
 import { availabilityQuerySchema } from "@/lib/validation/appointments";
-import { getSalonFromRequest } from "@/lib/domain/salon";
+import { getPublicSalon } from "@/lib/domain/salon";
 
 export async function GET(req: Request) {
-  const salon = await getSalonFromRequest(req);
-  if (!salon) {
-    return NextResponse.json({ error: "Salon not found." }, { status: 404 });
-  }
+  const result = await getPublicSalon(req);
+  if (!result.ok) return result.response;
+  const { salon } = result;
 
   const url = new URL(req.url);
   const parsed = availabilityQuerySchema.safeParse({

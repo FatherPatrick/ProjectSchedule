@@ -28,9 +28,10 @@ export type AppointmentActionResult =
  * loop.
  */
 export async function approveAppointment(
+  salonId: string,
   id: string
 ): Promise<AppointmentActionResult> {
-  const result = await runApproveTxnWithRetry(id);
+  const result = await runApproveTxnWithRetry(salonId, id);
   if (result.ok) {
     sendNotifications(id, "CONFIRMATION").catch((err) =>
       reportError(err, {
@@ -45,6 +46,7 @@ export async function approveAppointment(
 const APPROVE_MAX_ATTEMPTS = 3;
 
 async function runApproveTxnWithRetry(
+  salonId: string,
   id: string
 ): Promise<AppointmentActionResult> {
   let lastErr: unknown;
@@ -53,7 +55,7 @@ async function runApproveTxnWithRetry(
       return await prisma.$transaction(
         async (tx) => {
           const appt = await tx.appointment.findUnique({ where: { id } });
-          if (!appt) {
+          if (!appt || appt.salonId !== salonId) {
             return { ok: false, status: 404, error: "Not found" } as const;
           }
           if (appt.status !== "PENDING") {
@@ -140,11 +142,12 @@ export interface CancelAppointmentOptions {
  *   - an admin attached an explanatory note (e.g. when declining a request).
  */
 export async function cancelAppointment(
+  salonId: string,
   id: string,
   opts: CancelAppointmentOptions
 ): Promise<AppointmentActionResult> {
   const appt = await prisma.appointment.findUnique({ where: { id } });
-  if (!appt) return { ok: false, status: 404, error: "Not found" };
+  if (!appt || appt.salonId !== salonId) return { ok: false, status: 404, error: "Not found" };
   if (appt.status !== "CONFIRMED" && appt.status !== "PENDING") {
     return { ok: false, status: 409, error: "Already inactive" };
   }

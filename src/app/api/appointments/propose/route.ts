@@ -14,15 +14,14 @@ import {
   isBeyondBookingWindow,
   BEYOND_WINDOW_MESSAGE,
 } from "@/lib/domain/settings";
-import { getSalonFromRequest } from "@/lib/domain/salon";
+import { getPublicSalon } from "@/lib/domain/salon";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
-  const salon = await getSalonFromRequest(req);
-  if (!salon) {
-    return NextResponse.json({ error: "Salon not found." }, { status: 404 });
-  }
+  const result = await getPublicSalon(req);
+  if (!result.ok) return result.response;
+  const { salon } = result;
 
   const body = await parseJsonBody(req);
   if (!body.ok) return body.response;
@@ -132,27 +131,31 @@ export async function POST(req: Request) {
     },
   });
 
+  const whenLabel = formatBiz(startsAt, "EEE MMM d, h:mm a", salon.timezone);
+
   // Notify admins on their phones (fire-and-forget).
   pushToAdmins(
     {
       title: "New appointment request",
-      body: `${data.name} · ${service.name} · ${formatBiz(startsAt, "EEE MMM d, h:mm a")}`,
+      body: `${data.name} · ${service.name} · ${whenLabel}`,
       data: { appointmentId: appointment.id, kind: "PENDING_REQUEST" },
     },
-    { appointmentId: appointment.id }
+    { appointmentId: appointment.id, salonId: salon.id }
   );
   // SMS the admins who opted in.
   notifyAdminsOfBooking({
     kind: "requested",
+    salonId: salon.id,
+    salonName: salon.name,
     clientName: data.name,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEE MMM d, h:mm a"),
+    whenLabel,
   });
 
   return NextResponse.json({
     id: appointment.id,
     managementToken: appointment.managementToken,
     serviceName: service.name,
-    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a"),
+    whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone),
   });
 }

@@ -4,11 +4,11 @@ import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { bizWallClockToUTC } from "@/lib/timezone";
 import { hhmmToMinutes, nextDay } from "@/lib/domain/dates";
 import { blackoutCreateSchema } from "@/lib/validation/blackouts";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import type { BlackoutsListResponse } from "@/lib/api-types";
 
 export const GET = withAdmin(async (req) => {
-  const salonId = await getAdminSalonId();
+  const { salonId } = (await requireAdminSalon(req))!;
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
   const rows = await prisma.blackout.findMany({
@@ -25,8 +25,8 @@ export const GET = withAdmin(async (req) => {
   } satisfies BlackoutsListResponse);
 });
 
-export const POST = withAdminJson(blackoutCreateSchema, async (data) => {
-  const salonId = await getAdminSalonId();
+export const POST = withAdminJson(blackoutCreateSchema, async (data, req) => {
+  const { salonId } = (await requireAdminSalon(req))!;
   const { fromDay, toDay, allDay, startTime, endTime, reason } = data;
 
   let startsAt: Date;

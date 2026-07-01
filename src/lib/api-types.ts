@@ -211,7 +211,7 @@ export type OtpVerifyInput = {
   deviceLabel?: string;
 };
 
-export type MobileTokenUser = { id: string; role: "ADMIN" };
+export type MobileTokenUser = { id: string; role: "ADMIN"; salonId: string };
 
 export type OtpVerifyResult = {
   accessToken: string;

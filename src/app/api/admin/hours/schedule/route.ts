@@ -3,14 +3,14 @@ import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { businessHoursScheduleJsonCreateSchema } from "@/lib/validation/adminJson";
 import { bizDateKey } from "@/lib/timezone";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import type { HoursOverride, HoursScheduleResponse } from "@/lib/api-types";
 
 /**
  * GET — list future overrides (`effectiveFrom > today`), grouped by date.
  */
 export const GET = withAdmin(async (req) => {
-  const salonId = await getAdminSalonId();
+  const { salonId } = (await requireAdminSalon(req))!;
   const url = new URL(req.url);
   const includePast = url.searchParams.get("includePast") === "true";
 
@@ -49,8 +49,8 @@ export const GET = withAdmin(async (req) => {
  */
 export const POST = withAdminJson(
   businessHoursScheduleJsonCreateSchema,
-  async (data) => {
-    const salonId = await getAdminSalonId();
+  async (data, req) => {
+    const { salonId } = (await requireAdminSalon(req))!;
     const { effectiveFrom: dateStr, note, days } = data;
     if (dateStr <= bizDateKey(new Date())) {
       return NextResponse.json(

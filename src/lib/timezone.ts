@@ -1,9 +1,9 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 import { BUSINESS_TIMEZONE } from "./config";
 
-/** Format a UTC Date in the business timezone. */
-export function formatBiz(date: Date, fmt: string): string {
-  return formatInTimeZone(date, BUSINESS_TIMEZONE, fmt);
+/** Format a UTC Date in the given timezone (or the business default). */
+export function formatBiz(date: Date, fmt: string, timezone: string = BUSINESS_TIMEZONE): string {
+  return formatInTimeZone(date, timezone, fmt);
 }
 
 /** Convert a wall-clock time in the business timezone to a UTC Date. */

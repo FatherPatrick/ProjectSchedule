@@ -9,10 +9,9 @@ import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { toE164 } from "@/lib/phone";
 
 /**
- * Admin-allow-list management endpoints (cookie-session admins only —
- * we deliberately don't expose this to the mobile Bearer flow). The
- * GET returns the union of DB-managed entries and env-bootstrap
- * entries; only DB entries are deletable via the [phone] DELETE route.
+ * Admin allow-list management endpoints (cookie-session admins only —
+ * this is a sensitive management surface, not exposed to the mobile
+ * Bearer flow). The GET returns DB-managed entries for the caller's salon.
  */
 
 const addAdminSchema = z.object({
@@ -20,17 +19,15 @@ const addAdminSchema = z.object({
 });
 
 export async function GET() {
-  if (!(await requireAdmin())) {
+  const session = await requireAdmin();
+  if (!session?.user.salonId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const admins = await listAdminPhones();
+  const admins = await listAdminPhones(session.user.salonId);
   return NextResponse.json({
     admins: admins.map((a) => ({
       phone: a.phone,
-      source: a.source,
       notify: a.notify,
-      // The env-source sentinel `new Date(0)` is dropped client-side; we
-      // still emit a real ISO so the JSON shape stays uniform.
       createdAt: a.createdAt.toISOString(),
       createdById: a.createdById,
     })),
@@ -39,7 +36,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await requireAdmin();
-  if (!session) {
+  if (!session?.user.salonId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await parseJsonBody(req);
@@ -55,6 +52,6 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  await addAdminPhone(phone, session.user.id);
+  await addAdminPhone(session.user.salonId, phone, session.user.id);
   return NextResponse.json({ ok: true, phone });
 }

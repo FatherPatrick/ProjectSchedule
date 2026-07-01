@@ -1,21 +1,16 @@
 /**
  * Admin allow-list management page.
  *
- * Lists every phone that can sign into the admin area — both DB-managed
- * entries (added here, deletable here) and env-bootstrap entries (from
- * the legacy `ADMIN_PHONES` env var, surfaced read-only).
- *
+ * Lists every phone that can sign into this salon's admin area.
  * Server actions are used for both add and remove so the page works
- * without client-side JS and so the existing `assertAdmin` server-side
- * guard applies to every mutation.
+ * without client-side JS and so the server-side admin guard applies
+ * to every mutation.
  */
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import {
-  ENV_ADMIN_PHONES,
   addAdminPhone,
-  assertAdmin,
   listAdminPhones,
   removeAdminPhone,
   requireAdmin,
@@ -34,14 +29,14 @@ export const dynamic = "force-dynamic";
 async function inviteAdmin(formData: FormData) {
   "use server";
   const session = await requireAdmin();
-  if (!session) throw new Error("Unauthorized");
+  if (!session?.user.salonId) throw new Error("Unauthorized");
 
   const raw = String(formData.get("phone") ?? "").trim();
   const phone = toE164(raw);
   if (!phone) {
     redirect("/admin/admins?error=invalid");
   }
-  await addAdminPhone(phone, session.user.id);
+  await addAdminPhone(session.user.salonId, phone, session.user.id);
   revalidatePath("/admin/admins");
   redirect("/admin/admins?saved=added");
 }
@@ -49,13 +44,8 @@ async function inviteAdmin(formData: FormData) {
 async function revokeAdmin(phone: string) {
   "use server";
   const session = await requireAdmin();
-  if (!session) throw new Error("Unauthorized");
+  if (!session?.user.salonId) throw new Error("Unauthorized");
 
-  // Mirror the API guardrails so the server action can't be used to
-  // bypass them by directly submitting the form.
-  if (ENV_ADMIN_PHONES.has(phone)) {
-    redirect("/admin/admins?error=env");
-  }
   const me = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { phone: true },
@@ -63,7 +53,7 @@ async function revokeAdmin(phone: string) {
   if (me?.phone === phone) {
     redirect("/admin/admins?error=self");
   }
-  await removeAdminPhone(phone);
+  await removeAdminPhone(session.user.salonId, phone);
   revalidatePath("/admin/admins");
   redirect("/admin/admins?saved=removed");
 }
@@ -71,8 +61,8 @@ async function revokeAdmin(phone: string) {
 async function setNotify(phone: string, next: boolean) {
   "use server";
   const session = await requireAdmin();
-  if (!session) throw new Error("Unauthorized");
-  await setAdminNotify(phone, next);
+  if (!session?.user.salonId) throw new Error("Unauthorized");
+  await setAdminNotify(session.user.salonId, phone, next);
   revalidatePath("/admin/admins");
   redirect("/admin/admins?saved=notify");
 }
@@ -91,11 +81,12 @@ export default async function AdminsPage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
-  await assertAdmin();
-  const { saved, error } = await searchParams;
-  const admins = await listAdminPhones();
+  const adminSession = await requireAdmin();
+  if (!adminSession?.user.salonId) redirect("/auth/sign-in?callbackUrl=/admin/admins");
 
-  // Pre-resolve inviter labels server-side so the JSX stays sync.
+  const { saved, error } = await searchParams;
+  const admins = await listAdminPhones(adminSession.user.salonId);
+
   const inviterLabels = await Promise.all(
     admins.map((a) => maskedInviter(a.createdById))
   );
@@ -151,14 +142,8 @@ export default async function AdminsPage({
             <div className="min-w-0">
               <div className="font-medium text-neutral-900">{a.phone}</div>
               <div className="text-xs text-neutral-500">
-                {a.source === "env" ? (
-                  <span>From ADMIN_PHONES env var</span>
-                ) : (
-                  <span>
-                    Added {a.createdAt.toLocaleDateString()}
-                    {inviterLabels[i] !== "—" ? ` by ${inviterLabels[i]}` : ""}
-                  </span>
-                )}
+                Added {a.createdAt.toLocaleDateString()}
+                {inviterLabels[i] !== "—" ? ` by ${inviterLabels[i]}` : ""}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -177,31 +162,22 @@ export default async function AdminsPage({
                   {a.notify ? "Alerts on" : "Alerts off"}
                 </button>
               </form>
-              {a.source === "db" ? (
-                <form action={revokeAdmin.bind(null, a.phone)}>
-                  <Button
-                    type="submit"
-                    variant="danger"
-                    size="sm"
-                    aria-label={`Remove admin ${a.phone}`}
-                  >
-                    Remove
-                  </Button>
-                </form>
-              ) : (
-                <span
-                  className="text-xs rounded-full border border-neutral-200 px-3 py-1 text-neutral-500"
-                  title="Managed via the ADMIN_PHONES env var"
+              <form action={revokeAdmin.bind(null, a.phone)}>
+                <Button
+                  type="submit"
+                  variant="danger"
+                  size="sm"
+                  aria-label={`Remove admin ${a.phone}`}
                 >
-                  env-managed
-                </span>
-              )}
+                  Remove
+                </Button>
+              </form>
             </div>
           </li>
         ))}
         {admins.length === 0 ? (
           <li className="p-4 text-sm text-neutral-500">
-            No admins configured. Add one above or set ADMIN_PHONES.
+            No admins configured. Add one above.
           </li>
         ) : null}
       </ul>

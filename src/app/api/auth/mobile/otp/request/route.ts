@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { toE164 } from "@/lib/phone";
 import { isAdminPhone } from "@/lib/auth/admin";
+import { prisma } from "@/lib/db/prisma";
 import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { sendOtp } from "@/lib/integrations/verify";
 import { reportError } from "@/lib/observability/reportError";
@@ -18,7 +19,6 @@ import {
  */
 const schema = z.object({ phone: z.string().min(7).max(32) });
 
-// Same limits as the web OTP endpoint — Twilio Verify charges per send.
 const IP_LIMIT = 5;
 const PHONE_LIMIT = 3;
 const WINDOW_MS = 10 * 60_000;
@@ -61,7 +61,13 @@ export async function POST(req: Request) {
     return NextResponse.json(init.body, { status: 429, headers: init.headers });
   }
 
-  if (await isAdminPhone(e164)) {
+  // Resolve salon from the subdomain set by the proxy.
+  const slug = req.headers.get("x-salon-slug");
+  const salon = slug
+    ? await prisma.salon.findUnique({ where: { slug }, select: { id: true } })
+    : null;
+
+  if (salon && (await isAdminPhone(salon.id, e164))) {
     try {
       await sendOtp(e164);
     } catch (err) {
@@ -72,7 +78,10 @@ export async function POST(req: Request) {
       );
     }
   } else {
-    logger.warn("[mobile-otp] request for non-admin phone", { phone: e164 });
+    logger.warn("[mobile-otp] request for non-admin phone or unknown salon", {
+      phone: e164,
+      slug,
+    });
   }
 
   return NextResponse.json({ ok: true });

@@ -23,6 +23,8 @@ export type MobileAccessPayload = {
   sid: string;
   /** Role at issue time. */
   role: "ADMIN" | "CLIENT";
+  /** The salon this admin manages. Required for ADMIN tokens (Phase 4+). */
+  salonId: string;
   /** Issued-at, seconds since epoch. */
   iat: number;
   /** Expires-at, seconds since epoch. */
@@ -60,6 +62,7 @@ export function signAccessToken(input: {
   userId: string;
   sessionId: string;
   role: "ADMIN" | "CLIENT";
+  salonId: string;
   /** Override TTL (seconds). Defaults to 15 minutes. */
   ttlSeconds?: number;
 }): { token: string; expiresAt: Date } {
@@ -69,6 +72,7 @@ export function signAccessToken(input: {
     sub: input.userId,
     sid: input.sessionId,
     role: input.role,
+    salonId: input.salonId,
     iat: now,
     exp,
   };
@@ -107,6 +111,7 @@ export function verifyAccessToken(token: string): MobileAccessPayload | null {
   if (
     typeof payload?.sub !== "string" ||
     typeof payload?.sid !== "string" ||
+    typeof payload?.salonId !== "string" ||
     typeof payload?.exp !== "number" ||
     typeof payload?.iat !== "number"
   ) {

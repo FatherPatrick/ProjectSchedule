@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import { serviceJsonCreateSchema } from "@/lib/validation/adminJson";
 import type {
   ServiceCreateResponse,
@@ -9,7 +9,7 @@ import type {
 } from "@/lib/api-types";
 
 export const GET = withAdmin(async (req) => {
-  const salonId = await getAdminSalonId();
+  const { salonId } = (await requireAdminSalon(req))!;
   const url = new URL(req.url);
   const includeInactive = url.searchParams.get("includeInactive") !== "false";
 
@@ -30,8 +30,8 @@ export const GET = withAdmin(async (req) => {
   } satisfies ServicesListResponse);
 });
 
-export const POST = withAdminJson(serviceJsonCreateSchema, async (input) => {
-  const salonId = await getAdminSalonId();
+export const POST = withAdminJson(serviceJsonCreateSchema, async (input, req) => {
+  const { salonId } = (await requireAdminSalon(req))!;
   const { sortOrder, ...rest } = input;
   const created = await prisma.service.create({
     data: {

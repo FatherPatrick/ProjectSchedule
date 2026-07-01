@@ -9,7 +9,7 @@ import { reportError } from "@/lib/observability/reportError";
 import { toE164 } from "@/lib/phone";
 import { formatBiz } from "@/lib/timezone";
 import { adminAppointmentCreateSchema } from "@/lib/validation/appointments";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import type { AppointmentsListResponse } from "@/lib/api-types";
 
 /**
@@ -31,7 +31,7 @@ const MAX_ROWS = 500;
 const DEFAULT_RANGE_DAYS = 30;
 
 export const GET = withAdmin(async (req) => {
-  const salonId = await getAdminSalonId();
+  const { salonId } = (await requireAdminSalon(req))!;
 
   const url = new URL(req.url);
   const parsed = querySchema.safeParse({
@@ -104,8 +104,8 @@ export const GET = withAdmin(async (req) => {
  */
 export const POST = withAdminJson(
   adminAppointmentCreateSchema,
-  async (data) => {
-    const salonId = await getAdminSalonId();
+  async (data, req) => {
+    const { salonId } = (await requireAdminSalon(req))!;
 
     const service = await prisma.service.findUnique({
       where: { id: data.serviceId },

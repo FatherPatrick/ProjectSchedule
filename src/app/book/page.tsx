@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
-import { getDefaultSalonId } from "@/lib/domain/salon";
+import { getSalonFromContext } from "@/lib/domain/salon";
 import { Alert } from "@/components/Alert";
 import { BookingForm } from "./BookingForm";
 
@@ -12,7 +12,26 @@ export default async function BookPage({
   searchParams: Promise<{ serviceId?: string }>;
 }) {
   const { serviceId: initialServiceId } = await searchParams;
-  const salonId = await getDefaultSalonId();
+  const salon = await getSalonFromContext();
+  if (!salon) {
+    return (
+      <div className="max-w-sm mx-auto py-16 text-center space-y-2">
+        <h1 className="text-xl font-semibold">Salon not found</h1>
+        <p className="text-sm text-neutral-600">This booking page is unavailable.</p>
+      </div>
+    );
+  }
+  if (salon.status !== "ACTIVE") {
+    return (
+      <div className="max-w-sm mx-auto py-16 text-center space-y-2">
+        <h1 className="text-xl font-semibold">Bookings unavailable</h1>
+        <p className="text-sm text-neutral-600">
+          This salon is not currently accepting bookings. Please check back later.
+        </p>
+      </div>
+    );
+  }
+  const salonId = salon.id;
   const [services, hours, settings] = await Promise.all([
     prisma.service.findMany({
       where: { salonId, active: true },

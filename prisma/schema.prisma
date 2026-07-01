@@ -225,22 +225,21 @@ model Setting {
 }
 
 /// DB-managed admin allow-list. A phone is an admin of a specific salon.
-/// The composite PK (salonId, phone) is enforced after the Phase 1c migration;
-/// during Phase 1a the phone column is still the sole PK.
+/// Composite PK enforced after the Phase 4 migration backfills salonId.
 model AdminPhone {
   /// E.164 phone number, e.g. "+15555551212".
-  phone       String   @id
-  salonId     String?
+  phone       String
+  salonId     String
   /// When true, this admin receives an SMS when a client books or requests an
   /// appointment.
   notify      Boolean  @default(true)
   createdAt   DateTime @default(now())
   /// User.id of the admin who invited this phone.
   createdById String?
-  salon       Salon?   @relation(fields: [salonId], references: [id])
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   createdBy   User?    @relation("AdminPhoneInviter", fields: [createdById], references: [id], onDelete: SetNull)
 
-  @@index([salonId])
+  @@id([salonId, phone])
   @@index([createdById])
 }
 

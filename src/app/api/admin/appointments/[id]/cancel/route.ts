@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/http/withAdmin";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import { cancelAppointment } from "@/lib/domain/appointments";
 import { tryParseJsonBody } from "@/lib/http/parseJsonBody";
 import { appointmentCancelBodySchema } from "@/lib/validation/admin";
@@ -7,6 +8,7 @@ import { appointmentCancelBodySchema } from "@/lib/validation/admin";
 export const POST = withAdmin(
   async (req, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
+    const { salonId } = (await requireAdminSalon(req))!;
 
     // Body is optional. If present, parse with Zod so we get consistent
     // trimming + length-limit handling instead of ad-hoc casting.
@@ -20,7 +22,7 @@ export const POST = withAdmin(
       note = parsed.data.message?.trim() || undefined;
     }
 
-    const result = await cancelAppointment(id, { byAdmin: true, note });
+    const result = await cancelAppointment(salonId, id, { byAdmin: true, note });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }

@@ -21,18 +21,6 @@ const nonEmpty = z
   .min(1)
   .transform((s) => s);
 
-/** A list of comma-separated values, e.g. `+15555551212,+15555551313`. */
-const csv = z
-  .string()
-  .trim()
-  .min(1)
-  .transform((s) => s.split(",").map((p) => p.trim()).filter(Boolean));
-
-const phoneCsv = csv.refine(
-  (list) => list.every((p) => /^\+\d{8,15}$/.test(p)),
-  { message: "ADMIN_PHONES must be comma-separated E.164 numbers (e.g. +15555551212)." }
-);
-
 /**
  * Schema describing every env var the server side of the app touches.
  *
@@ -51,13 +39,8 @@ const baseSchema = z.object({
   AUTH_SECRET: nonEmpty.optional(),
   NEXTAUTH_SECRET: nonEmpty.optional(),
 
-  // Public / display.
-  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
-  NEXT_PUBLIC_BUSINESS_NAME: z.string().optional(),
-  NEXT_PUBLIC_BUSINESS_TIMEZONE: z.string().optional(),
-
-  // Admin allow-list (E.164 phones).
-  ADMIN_PHONES: phoneCsv.optional(),
+  // Platform base domain — per-salon URLs are built as https://<slug>.<domain>.
+  NEXT_PUBLIC_APP_BASE_DOMAIN: z.string().optional(),
 
   // Mobile token signing.
   MOBILE_TOKEN_SECRET: nonEmpty.optional(),
@@ -113,12 +96,8 @@ function collectProdProblems(env: Env): string[] {
     problems.push("MOBILE_TOKEN_SECRET is required in production.");
   }
 
-  if (!env.NEXT_PUBLIC_APP_URL) {
-    problems.push("NEXT_PUBLIC_APP_URL is required in production (used in cancel/management links).");
-  }
-
-  if (!env.ADMIN_PHONES || env.ADMIN_PHONES.length === 0) {
-    problems.push("ADMIN_PHONES is required in production (no admin sign-in is otherwise possible).");
+  if (!env.NEXT_PUBLIC_APP_BASE_DOMAIN) {
+    problems.push("NEXT_PUBLIC_APP_BASE_DOMAIN is required in production (used to build per-salon cancel/management links).");
   }
 
   if (!env.CRON_SECRET) {

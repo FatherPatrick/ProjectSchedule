@@ -41,7 +41,9 @@ export interface PushPayload {
 export interface PushOptions {
   /** When provided, an `NotificationLog` row is written per recipient. */
   appointmentId?: string;
-  /** When omitted, all ADMIN users with live sessions are targeted. */
+  /** Scope pushes to this salon's admins only. Always provide this — without it every admin on every salon receives the notification. */
+  salonId?: string;
+  /** When omitted, all admins for the given salon with live sessions are targeted. */
   userIds?: string[];
 }
 
@@ -88,7 +90,10 @@ async function sendPushInternal(
       revokedAt: null,
       expiresAt: { gt: new Date() },
       pushToken: { not: null },
-      user: { role: "ADMIN" },
+      user: {
+        role: "ADMIN",
+        ...(opts.salonId ? { salonId: opts.salonId } : {}),
+      },
       ...(opts.userIds ? { userId: { in: opts.userIds } } : {}),
     },
     select: { id: true, pushToken: true },

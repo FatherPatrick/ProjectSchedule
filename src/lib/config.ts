@@ -4,8 +4,19 @@ export const BUSINESS_NAME =
 export const BUSINESS_TIMEZONE =
   process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Los_Angeles";
 
-export const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+/** Platform base domain, e.g. "app.com". Per-salon URLs: https://<slug>.<domain>. */
+export const APP_BASE_DOMAIN =
+  process.env.NEXT_PUBLIC_APP_BASE_DOMAIN ?? "localhost:3000";
+
+/** Build the canonical public URL for a salon by slug. */
+export function salonAppUrl(slug: string): string {
+  const domain = APP_BASE_DOMAIN;
+  const isLocal =
+    domain.startsWith("localhost") || domain.startsWith("127.0.0.1");
+  return isLocal
+    ? `http://${slug}.${domain}`
+    : `https://${slug}.${domain}`;
+}
 
 // Cancellation window in hours — clients cannot self-cancel inside this window.
 export const CANCELLATION_WINDOW_HOURS = 24;

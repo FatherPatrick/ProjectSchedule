@@ -2,15 +2,17 @@ import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/http/withAdmin";
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
-import { getAdminSalonId } from "@/lib/domain/salon";
+import { requireAdminSalon } from "@/lib/auth/admin";
 import { sendReviewRequest } from "@/lib/integrations/notifications";
 
 export const POST = withAdmin(
-  async (_req, { params }: { params: Promise<{ id: string }> }) => {
+  async (req, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
-    const salonId = await getAdminSalonId();
+    const { salonId } = (await requireAdminSalon(req))!;
 
-    const appt = await prisma.appointment.findUnique({ where: { id } });
+    const appt = await prisma.appointment.findFirst({
+      where: { id, salonId },
+    });
     if (!appt) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -21,10 +23,13 @@ export const POST = withAdmin(
       );
     }
 
-    await prisma.appointment.update({
-      where: { id },
+    const { count } = await prisma.appointment.updateMany({
+      where: { id, salonId },
       data: { status: "COMPLETED" },
     });
+    if (count === 0) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     const settings = await getSettings(salonId);
     if (settings.reviewRequestEnabled && settings.reviewRequestUrl) {
