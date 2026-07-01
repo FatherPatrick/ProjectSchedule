@@ -19,6 +19,13 @@
   credentials, and wire EAS Submit for TestFlight and Play Internal Testing.
 - **In-app toasts (mobile):** replace blocking `Alert.alert` success
   feedback with a non-blocking toast (e.g. `burnt` or `react-native-toast-message`).
+- **Stripe payments (feature-flagged):** schema is live but inert. Before
+  flipping `STRIPE_PAYMENTS_ENABLED=true` in production, set
+  `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`,
+  `STRIPE_WEBHOOK_SECRET`, and `PLATFORM_FEE_PERCENT` — the app refuses to
+  boot in prod with the flag on and any of those missing. See
+  [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md) ("Feature flag & rollout
+  status") for what's built vs. outstanding.
 
 ## Tech debt
 
@@ -35,7 +42,7 @@
 
 ### Spec rollout order
 
-1. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
+1. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. *Phase 1 of 7 done (schema + feature flag, fully inert).* See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
 2. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. Tier 1 items (iCal links, visit history, rebook, review requests, waitlist) are mostly independent; Packages depends on Stripe. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)
 
 Variations:

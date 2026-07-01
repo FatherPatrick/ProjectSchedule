@@ -70,9 +70,12 @@ async function runApproveTxnWithRetry(
             where: {
               salonId: appt.salonId,
               id: { not: appt.id },
-              status: "CONFIRMED",
               startsAt: { lt: appt.endsAt },
               endsAt: { gt: appt.startsAt },
+              OR: [
+                { status: "CONFIRMED" },
+                { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
+              ],
             },
             select: { id: true },
           });

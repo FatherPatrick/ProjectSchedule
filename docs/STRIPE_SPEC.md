@@ -48,6 +48,46 @@ are tenant-scoped. If Stripe is built *before* multi-tenant, every "salon" below
 collapses to the single backfilled salon — but the schema should be authored
 salon-scoped from the start to avoid a second migration.
 
+## Feature flag & rollout status
+
+This feature ships behind a **global env kill-switch**, `STRIPE_PAYMENTS_ENABLED`
+(`src/lib/env.ts`), separate from the per-salon `Salon.paymentsEnabled` DB
+toggle described in §3:
+
+- `STRIPE_PAYMENTS_ENABLED` gates the feature **platform-wide** — once later
+  phases build it out, this controls whether the Stripe admin nav/pages
+  render, the API routes respond, and the webhook is live. It defaults to
+  `"false"` everywhere, including production, so an unfinished rollout can
+  never accidentally go live.
+- `Salon.paymentsEnabled` (+ `paymentMode`) is the **per-salon** toggle an
+  individual salon's admin controls once the platform-wide flag is on. It
+  can only be `true` when `stripeChargesEnabled` is also true (§2.2).
+- `src/lib/flags.ts` exports `isStripePaymentsEnabled()` — the one place
+  that reads the env var. New code should gate on this helper, not on
+  `process.env.STRIPE_PAYMENTS_ENABLED` directly.
+
+**To turn the flag on** (once enough of the phases below are built to be
+useful): set `STRIPE_PAYMENTS_ENABLED=true` plus `STRIPE_SECRET_KEY`,
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, and
+`PLATFORM_FEE_PERCENT` in the target environment's `.env` (see
+`.env.example` for the full list with inline comments). In production,
+`collectProdProblems` in `src/lib/env.ts` will refuse to boot if the flag is
+`true` but any of those four are missing — so there's no way to half-enable
+it in prod. Flipping the flag on today (before Phase 2+ exist) is harmless
+but pointless: the schema is live, but nothing reads the flag yet.
+
+**Progress against the rollout phases in §12:**
+
+| Phase | Status |
+| --- | --- |
+| 1. Schema + flag | ✅ Done — migration `prisma/migrations/20260701214626_add_stripe_payment_schema`, flag scaffolding in `src/lib/env.ts` / `src/lib/flags.ts`, busy-set fix (§1.4) live in all 5 conflict-check call sites. |
+| 2. Connect onboarding | Not started |
+| 3. Admin config | Not started |
+| 4. Booking + payment | Not started |
+| 5. Refunds + sweeper | Not started |
+| 6. Billing dashboard | Not started |
+| 7. Hardening | Not started |
+
 ## Charge model: direct charges on the connected account
 
 Use **direct charges** (`PaymentIntent` created with the `Stripe-Account` header
@@ -495,7 +535,7 @@ access token already carries `salonId`); refunds can stay web-only initially.
 
 1. **Schema** — `Salon` Connect + payment-config fields, `Payment` model,
    `PENDING_PAYMENT` status + `holdExpiresAt`, busy-set rule (§1.4). Ship inert
-   (no payments enabled).
+   (no payments enabled). ✅ **Done** — see "Feature flag & rollout status" above.
 2. **Connect onboarding** — create account, Account Links, `account.updated`
    webhook, status display in admin. No charges yet.
 3. **Admin config** — payments toggle + mode + deposit config + `amountForBooking`

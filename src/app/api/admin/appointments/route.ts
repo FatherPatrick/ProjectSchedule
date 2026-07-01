@@ -136,9 +136,12 @@ export const POST = withAdminJson(
     const conflict = await prisma.appointment.findFirst({
       where: {
         salonId,
-        status: "CONFIRMED",
         startsAt: { lt: endsAt },
         endsAt: { gt: startsAt },
+        OR: [
+          { status: "CONFIRMED" },
+          { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
+        ],
       },
       select: { id: true },
     });

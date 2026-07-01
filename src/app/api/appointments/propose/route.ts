@@ -79,13 +79,17 @@ export async function POST(req: Request) {
     startsAt.getTime() + service.durationMinutes * 60_000
   );
 
-  // Don't let proposals overlap an existing CONFIRMED appointment for this salon.
+  // Don't let proposals overlap an existing CONFIRMED appointment (or an
+  // unexpired payment hold) for this salon.
   const conflict = await prisma.appointment.findFirst({
     where: {
       salonId: salon.id,
-      status: "CONFIRMED",
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
+      OR: [
+        { status: "CONFIRMED" },
+        { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
+      ],
     },
     select: { id: true },
   });

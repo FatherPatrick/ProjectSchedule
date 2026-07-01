@@ -24,6 +24,10 @@ const STATUS_BADGE: Record<AppointmentStatus, { label: string; className: string
     label: "Pending",
     className: "bg-amber-50 text-amber-700 border-amber-200",
   },
+  PENDING_PAYMENT: {
+    label: "Awaiting payment",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
   NO_SHOW: {
     label: "No-show",
     className: "bg-orange-50 text-orange-700 border-orange-200",

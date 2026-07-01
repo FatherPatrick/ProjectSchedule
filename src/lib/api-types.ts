@@ -35,6 +35,7 @@ export type ErrorResponse = { error: string };
 
 export type AppointmentStatus =
   | "PENDING"
+  | "PENDING_PAYMENT"
   | "CONFIRMED"
   | "CANCELLED"
   | "COMPLETED"

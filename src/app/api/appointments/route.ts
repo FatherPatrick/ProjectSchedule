@@ -96,13 +96,17 @@ export async function POST(req: Request) {
     startsAt.getTime() + service.durationMinutes * 60_000
   );
 
-  // Race-safe overlap check scoped to this salon.
+  // Race-safe overlap check scoped to this salon. Counts unexpired payment
+  // holds as busy too, so two clients can't both pay for the same slot.
   const conflict = await prisma.appointment.findFirst({
     where: {
       salonId: salon.id,
-      status: "CONFIRMED",
       startsAt: { lt: endsAt },
       endsAt: { gt: startsAt },
+      OR: [
+        { status: "CONFIRMED" },
+        { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
+      ],
     },
     select: { id: true },
   });

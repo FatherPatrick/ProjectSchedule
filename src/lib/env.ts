@@ -75,6 +75,17 @@ const baseSchema = z.object({
   // start failing because the client never attaches a token.
   TURNSTILE_SECRET_KEY: nonEmpty.optional(),
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: nonEmpty.optional(),
+
+  // Stripe Connect payments (docs/STRIPE_SPEC.md) — global kill-switch.
+  // Defaults off; per-salon Salon.paymentsEnabled additionally gates actual
+  // charging once this is on. See src/lib/flags.ts.
+  STRIPE_PAYMENTS_ENABLED: z.enum(["true", "false"]).default("false"),
+  STRIPE_SECRET_KEY: nonEmpty.optional(),
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: nonEmpty.optional(),
+  STRIPE_WEBHOOK_SECRET: nonEmpty.optional(),
+  /// Kept as a raw string (parsed to a number where consumed) so an unset
+  /// `.env` entry ("") isn't coerced into a valid-looking 0.
+  PLATFORM_FEE_PERCENT: nonEmpty.optional(),
 });
 
 export type Env = z.infer<typeof baseSchema>;
@@ -138,6 +149,23 @@ function collectProdProblems(env: Env): string[] {
     problems.push(
       "TURNSTILE_SECRET_KEY and NEXT_PUBLIC_TURNSTILE_SITE_KEY must be set together (or both unset to disable captcha)."
     );
+  }
+
+  // Stripe payments stay inert (defaulted off) until explicitly turned on,
+  // so an unconfigured deploy of this feature never breaks prod boot.
+  if (env.STRIPE_PAYMENTS_ENABLED === "true") {
+    if (!env.STRIPE_SECRET_KEY) {
+      problems.push("STRIPE_SECRET_KEY is required in production when STRIPE_PAYMENTS_ENABLED=true.");
+    }
+    if (!env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+      problems.push("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is required in production when STRIPE_PAYMENTS_ENABLED=true.");
+    }
+    if (!env.STRIPE_WEBHOOK_SECRET) {
+      problems.push("STRIPE_WEBHOOK_SECRET is required in production when STRIPE_PAYMENTS_ENABLED=true.");
+    }
+    if (!env.PLATFORM_FEE_PERCENT) {
+      problems.push("PLATFORM_FEE_PERCENT is required in production when STRIPE_PAYMENTS_ENABLED=true.");
+    }
   }
 
   return problems;

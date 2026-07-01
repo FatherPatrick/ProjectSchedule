@@ -87,15 +87,21 @@ export async function getAvailableSlots(opts: {
   const dayStart = bizWallClockToUTC(dateKey, 0);
   const dayEnd = bizWallClockToUTC(dateKey, 24 * 60);
 
-  // Pull existing confirmed appointments and blackouts overlapping this day,
-  // scoped to this salon so cross-tenant data never blocks slots.
+  const now = new Date();
+
+  // Pull existing confirmed appointments (plus unexpired payment holds) and
+  // blackouts overlapping this day, scoped to this salon so cross-tenant
+  // data never blocks slots.
   const [appts, blackouts] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         salonId,
-        status: "CONFIRMED",
         startsAt: { lt: dayEnd },
         endsAt: { gt: dayStart },
+        OR: [
+          { status: "CONFIRMED" },
+          { status: "PENDING_PAYMENT", holdExpiresAt: { gt: now } },
+        ],
       },
       select: { startsAt: true, endsAt: true },
     }),
@@ -110,7 +116,6 @@ export async function getAvailableSlots(opts: {
   ]);
 
   const busy = [...appts, ...blackouts];
-  const now = new Date();
   // Latest start permitted by the "max book-out" setting (null = no limit).
   const maxStart =
     settings.maxAdvanceDays == null
