@@ -13,6 +13,7 @@ import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
 import { TurnstileWidget, isCaptchaEnabled } from "@/components/TurnstileWidget";
 import { ServicePicker } from "./ServicePicker";
+import { AddOnPicker } from "./AddOnPicker";
 import { DatePicker } from "./DatePicker";
 import { TimeSlotPicker } from "./TimeSlotPicker";
 import { ContactFields } from "./ContactFields";
@@ -52,6 +53,7 @@ export function BookingForm({
       ? initialServiceId
       : (services[0]?.id ?? "");
   const [serviceId, setServiceId] = useState<string>(resolvedInitialId);
+  const [addOnServiceIds, setAddOnServiceIds] = useState<string[]>([]);
   const [date, setDate] = useState<Date | undefined>();
   const [slots, setSlots] = useState<Slot[]>([]);
   const [startISO, setStartISO] = useState<string | null>(null);
@@ -111,12 +113,23 @@ export function BookingForm({
     () => services.find((s) => s.id === serviceId),
     [services, serviceId]
   );
+  const addOnCandidates = useMemo(
+    () => services.filter((s) => s.id !== serviceId),
+    [services, serviceId]
+  );
+  const selectedAddOns = useMemo(
+    () => services.filter((s) => addOnServiceIds.includes(s.id)),
+    [services, addOnServiceIds]
+  );
+  const totalPriceCents =
+    (service?.priceCents ?? 0) + selectedAddOns.reduce((sum, s) => sum + s.priceCents, 0);
 
-  // Compose a stable key for the current (service, date) selection. We use it
-  // both to drive fetching and to reset the chosen slot when inputs change,
-  // avoiding a setState-in-effect call.
+  // Compose a stable key for the current (service, add-ons, date) selection.
+  // We use it both to drive fetching and to reset the chosen slot when
+  // inputs change, avoiding a setState-in-effect call.
   const dateKey = date ? localDateKey(date) : "";
-  const slotsKey = serviceId && dateKey ? `${serviceId}|${dateKey}` : "";
+  const addOnsKey = [...addOnServiceIds].sort().join(",");
+  const slotsKey = serviceId && dateKey ? `${serviceId}|${addOnsKey}|${dateKey}` : "";
 
   const [loadedSlotsKey, setLoadedSlotsKey] = useState("");
   // If the slots key changed since we last loaded, the previously-selected slot
@@ -132,7 +145,8 @@ export function BookingForm({
   useEffect(() => {
     if (!slotsKey) return;
     let cancelled = false;
-    fetch(`/api/availability?serviceId=${serviceId}&date=${dateKey}`)
+    const addOnParam = addOnsKey ? `&addOnServiceIds=${addOnsKey}` : "";
+    fetch(`/api/availability?serviceId=${serviceId}&date=${dateKey}${addOnParam}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
@@ -147,7 +161,7 @@ export function BookingForm({
     return () => {
       cancelled = true;
     };
-  }, [slotsKey, serviceId, dateKey]);
+  }, [slotsKey, serviceId, dateKey, addOnsKey]);
 
   // Earliest date a custom proposal is valid (24h from now in client tz).
   const minProposeDate = useMemo(() => {
@@ -247,6 +261,7 @@ export function BookingForm({
     let endpoint = "/api/appointments";
     let body: Record<string, unknown> = {
       serviceId,
+      addOnServiceIds,
       startISO,
       name,
       phone,
@@ -275,6 +290,7 @@ export function BookingForm({
       endpoint = "/api/appointments/propose";
       body = {
         serviceId,
+        addOnServiceIds,
         startISO: iso,
         name,
         phone,
@@ -334,6 +350,7 @@ export function BookingForm({
           setStartISO(null);
           setProposeMode(false);
           setWaitlistMode(false);
+          setAddOnServiceIds([]);
           setCustomDate("");
           setCustomTime("");
           setCustomNotes("");
@@ -363,8 +380,23 @@ export function BookingForm({
       <ServicePicker
         services={services}
         serviceId={serviceId}
-        onSelect={setServiceId}
+        onSelect={(id) => {
+          setServiceId(id);
+          setAddOnServiceIds((prev) => prev.filter((x) => x !== id));
+        }}
       />
+
+      {!waitlistMode && (
+        <AddOnPicker
+          addOns={addOnCandidates}
+          selectedIds={addOnServiceIds}
+          onToggle={(id) =>
+            setAddOnServiceIds((prev) =>
+              prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+            )
+          }
+        />
+      )}
 
       {waitlistMode ? (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-soft bg-brand-soft p-3 text-sm text-brand">
@@ -491,7 +523,7 @@ export function BookingForm({
                 ? `Request ${service.name}`
                 : "Send request"
               : service
-                ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
+                ? `Book ${service.name}${selectedAddOns.length > 0 ? ` +${selectedAddOns.length}` : ""} · ${formatPrice(totalPriceCents)}`
                 : "Book"}
       </Button>
     </form>

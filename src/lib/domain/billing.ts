@@ -90,6 +90,12 @@ export interface ServiceRevenue {
   count: number;
 }
 
+/**
+ * Attributes a multi-service booking's full payment to its primary service
+ * only (docs/FEATURE_OPPORTUNITIES_SPEC.md #6) — add-on revenue isn't broken
+ * out separately here. `listPayments` below shows the full "Gel Manicure +
+ * Pedicure" combo per row for that detail.
+ */
 export async function getRevenueByService(
   salonId: string,
   range: DateRange
@@ -155,6 +161,10 @@ export async function listPayments(
         select: {
           client: { select: { name: true } },
           service: { select: { name: true } },
+          addOns: {
+            select: { service: { select: { name: true } } },
+            orderBy: { sortOrder: "asc" },
+          },
         },
       },
     },
@@ -163,7 +173,9 @@ export async function listPayments(
   return payments.map((p) => ({
     id: p.id,
     clientName: p.appointment.client.name,
-    serviceName: p.appointment.service.name,
+    serviceName: [p.appointment.service.name, ...p.appointment.addOns.map((a) => a.service.name)].join(
+      " + "
+    ),
     amountCents: p.amountCents,
     refundedCents: p.refundedCents,
     currency: p.currency,

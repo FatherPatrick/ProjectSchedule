@@ -19,11 +19,23 @@ const SALON_SLUG = "test-salon";
 
 const prismaMock = vi.hoisted(() => ({
   salon: { findUnique: vi.fn() },
-  service: { findUnique: vi.fn() },
+  service: { findUnique: vi.fn(), findMany: vi.fn() },
   appointment: { findFirst: vi.fn(), create: vi.fn() },
+  appointmentAddOn: { createMany: vi.fn() },
+  clientPackage: {
+    findMany: vi.fn(
+      async (): Promise<{ id: string; sessionsUsed: number; sessionsTotal: number }[]> => []
+    ),
+    update: vi.fn(),
+  },
   client: { upsert: vi.fn() },
   setting: { upsert: vi.fn() },
+  $transaction: vi.fn(),
 }));
+// Interactive transactions in the routes under test just run the callback
+// against this same mock client — good enough since none of these tests
+// exercise multi-service add-ons (empty addOns skips appointmentAddOn entirely).
+prismaMock.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prismaMock));
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/domain/clients", () => ({
@@ -89,8 +101,10 @@ beforeEach(() => {
     status: "ACTIVE",
   });
   prismaMock.service.findUnique.mockReset();
+  prismaMock.service.findMany.mockReset();
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
   prismaMock.appointment.create.mockReset();
+  prismaMock.clientPackage.findMany.mockReset().mockResolvedValue([]);
   prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_1" });
   // Default settings: no book-out limit so existing cases are unaffected.
   prismaMock.setting.upsert.mockReset().mockResolvedValue({
@@ -217,6 +231,39 @@ describe("POST /api/appointments — domain rules", () => {
       createArgs.data.endsAt.getTime() - createArgs.data.startsAt.getTime()
     ).toBe(60 * 60_000);
     expect(createArgs.data.serviceId).toBe("svc_1");
+  });
+});
+
+describe("POST /api/appointments — package redemption", () => {
+  it("redeems a package session instead of creating a payment hold", async () => {
+    mockServiceOk();
+    prismaMock.clientPackage.findMany.mockResolvedValueOnce([
+      { id: "cp_1", sessionsUsed: 2, sessionsTotal: 5 },
+    ]);
+    prismaMock.appointment.create.mockResolvedValue({
+      id: "appt_1",
+      managementToken: "tok",
+    });
+
+    const res = await POST(postJson(VALID_BODY));
+    expect(res.status).toBe(200);
+    const createArgs = prismaMock.appointment.create.mock.calls[0][0] as {
+      data: { clientPackageId?: string; status?: string };
+    };
+    expect(createArgs.data.clientPackageId).toBe("cp_1");
+    expect(createArgs.data.status).toBeUndefined(); // defaults to CONFIRMED
+  });
+
+  it("does not look up a package when the booking includes add-ons (no partial-package charges)", async () => {
+    mockServiceOk();
+    prismaMock.service.findMany.mockResolvedValueOnce([
+      { id: "svc_2", name: "Pedicure", durationMinutes: 30, priceCents: 3000 },
+    ]);
+    prismaMock.appointment.create.mockResolvedValue({ id: "appt_1", managementToken: "tok" });
+
+    await POST(postJson({ ...VALID_BODY, addOnServiceIds: ["svc_2"] }));
+
+    expect(prismaMock.clientPackage.findMany).not.toHaveBeenCalled();
   });
 });
 

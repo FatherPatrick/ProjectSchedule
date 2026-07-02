@@ -70,10 +70,10 @@ This table shows what's built, what's missing, and which competitors have it.
 | **Client visit history (admin)** | ✅ | ✅ | ✅ | ✅ | ✅ | Shipped — `/admin/clients` list + `/admin/clients/[id]` detail |
 | **Rebooking from confirmation** | ✅ | ❌ | ✅ (1-tap) | ✅ | ✅ | Shipped — `?serviceId=` deep link in confirmation/reminder emails |
 | **Review request (post-appt)** | ✅ | ❌ | ✅ | ❌ | ✅ | Shipped — fires on admin "mark complete", URL configurable in `/admin/hours` |
-| **Multi-service booking** | ❌ | ✅ | Partial | ✅ | ✅ | **Tier 2 gap** |
-| **Loyalty / stamp card** | ❌ | ❌ | ✅ | ❌ | ✅ | **Tier 2 gap** |
-| **Packages / bundles** | ❌ | ✅ | ✅ | ✅ | ✅ | **Tier 2 gap** |
-| **Recurring appointments** | ❌ | ❌ | ❌ | ✅ | Partial | **Tier 2 gap** |
+| **Multi-service booking** | ✅ | ✅ | Partial | ✅ | ✅ | Shipped — `AppointmentAddOn`, see #6 |
+| **Loyalty / stamp card** | ✅ | ❌ | ✅ | ❌ | ✅ | Shipped (stamp-card-only) — see #8 |
+| **Packages / bundles** | ✅ | ✅ | ✅ | ✅ | ✅ | Shipped (admin-sold, no online checkout yet) — see #7 |
+| **Recurring appointments** | ✅ (admin-only) | ❌ | ❌ | ✅ | Partial | Shipped — see #9 |
 | **Client portal (login)** | ❌ | ❌ | ❌ | ✅ | Partial | **Tier 2 gap** |
 | **Gift cards** | ❌ | ❌ | ❌ | ✅ | ✅ | **Tier 3** |
 | **Photo gallery (services)** | ❌ | ✅ | ✅ | ❌ | ❌ | **Tier 3** |
@@ -88,9 +88,14 @@ This table shows what's built, what's missing, and which competitors have it.
 
 - [x] **Waitlist architecture** — **resolved 2026-07-01: simple first-come-first-served notify.** On cancellation, notify the single oldest `WAITING` entry for the cancelled slot's service; if unclaimed within `waitlistClaimWindowMinutes`, move to the next entry. No rule-based priority queue for v1. (§ Waitlist)
 - [x] **Client accounts** — **resolved 2026-07-01: keep the current anonymous-booking + token-based model.** No Auth.js client login for now; Tier 2 features (loyalty balance, package credits) surface through the existing per-appointment management-token page rather than a persistent account. Client Portal (Tier 2 #10) stays out of scope until this is revisited. (§ Client Portal)
+- [x] **Loyalty program scope** — **resolved 2026-07-02: stamp card only.** 1
+  stamp per COMPLETED appointment; after `loyaltyStampsRequired` stamps, the
+  client earns a configurable reward. No points/cents-balance model. (§ Loyalty)
+- [x] **Package payment timing** — **resolved 2026-07-02: pay in full at
+  purchase.** One Stripe PaymentIntent for the full bundle price at purchase
+  time; each booking against it just draws down `sessionsUsed`, no further
+  charge. (§ Packages)
 - [ ] **Nail-salon specificity vs. general service** — should nail-specific workflows (nail length affecting duration, nail art photo selection, add-ons like gel/acrylic) be built, or keep the service abstraction generic for multi-tenant SaaS? (§ Nail-Specific Differentiation)
-- [ ] **Loyalty program scope** — points-based (earn/redeem cents), stamp card (visit 10 get 1 free), or both? (§ Loyalty)
-- [ ] **Package payment timing** — pay in full at package purchase vs. pay-per-use with a pre-purchased credit balance? (§ Packages)
 
 ---
 
@@ -204,18 +209,53 @@ enum WaitlistStatus { WAITING NOTIFIED CLAIMED EXPIRED }
 
 ### Tier 2 — Medium effort, strong retention / revenue lift
 
-#### 6. Multi-Service Booking
+**Status (2026-07-02): ✅ Tier 2 complete.** All four items — #6
+Multi-Service Booking, #7 Packages, #8 Loyalty, #9 Recurring — are shipped,
+in spec order. See each write-up below for what shipped and the scope
+decisions made along the way (all documented rather than silently applied).
+Client Portal (#10, Tier 2's other item) stays out of scope per the
+"Client accounts" decision above — that's the only Tier 2 item not built,
+deliberately. Next up is Tier 3 (photo gallery, social booking links,
+marketing campaigns, AI no-show prediction) whenever that's prioritized.
+
+#### 6. Multi-Service Booking — ✅ Shipped (2026-07-02)
 **What**: Client can add multiple services in a single booking session (e.g., gel manicure + pedicure). System calculates total duration and blocks the combined time.  
 **Why it wins**: Mindbody has this on their "coming soon" roadmap; it's a gap even top competitors haven't fully solved. For nail salons specifically, clients frequently want nail + pedicure combos.  
-**Schema changes**: `Appointment` currently links to a single `serviceId`. Either:  
-- Add a `AppointmentService` join table (allows multiple services per appointment), or  
-- Keep `serviceId` for the primary service and add an `addons` JSON field listing add-on service IDs.  
-The join table approach is cleaner for reporting.  
-**Effort**: 5–7 days (schema migration + booking form UX overhaul).
+
+**Implementation** (a deliberate, lower-blast-radius variant of the two schema options originally sketched here): kept `Appointment.serviceId` as the primary service and added a relational `AppointmentAddOn` join table for the rest — not the JSON-field option, but also not a full N-way `AppointmentService` normalization. Every existing read of `appointment.service` (billing, notifications, admin views, mobile types) kept working unchanged; add-ons are additive.
+- `AppointmentAddOn` model (`appointmentId`, `serviceId`, `sortOrder`) — no `salonId`, tenancy implied via `appointmentId` (same pattern as `NotificationLog`).
+- `src/lib/domain/appointmentServices.ts`: `resolveAddOnServices` (validates active/same-salon/no-duplicates/max 4), `totalDurationMinutes`/`totalPriceCents`, `createAppointmentWithAddOns` (appointment + add-on rows in one transaction — shared by all three booking-creation routes).
+- `getAvailableSlots` takes `additionalDurationMinutes` so the combined duration blocks the right window.
+- Public `BookingForm` gets a "2. Add extra services (optional)" checkbox step; `AdminBookingForm` gets the same for admin-created bookings.
+- Notifications (confirmation/reminder/cancellation/review-request) show "Gel Manicure + Pedicure" instead of just the primary service.
+- Admin calendar, client history, and the billing payments list all show the full service combo.
+
+**Known simplification, not a bug**: the billing dashboard's per-service revenue breakdown (`getRevenueByService`) still attributes a multi-service booking's *entire* payment to the primary service only — add-on revenue isn't broken out per-service there (though the payments list row does show the full combo). Splitting a bundled charge across services would need either a price-allocation rule or per-service Payment rows, out of scope for this pass.
+
+**Also out of scope for now**: the waitlist (#5 above) is single-service only — joining the waitlist for a multi-service combo isn't supported. Mobile app types (`AppointmentDTO`) still expose only the primary service, consistent with mobile styling being tracked separately in `TODO.md`.
 
 #### 7. Packages / Prepaid Bundles
 **What**: Client purchases a bundle (e.g., "5 gel manicures for $200, save $25"). Each booking deducts from their balance. Admin can see a client's remaining package credits.  
-**Why it wins**: Acuity's package system is their #1 retention differentiator for service businesses. Upfront revenue, guaranteed future visits.  
+**Why it wins**: Acuity's package system is their #1 retention differentiator for service businesses. Upfront revenue, guaranteed future visits.
+
+**Scope decision (2026-07-02), not asked as a separate open decision but worth
+recording:** v1 does **not** build a public self-checkout for buying a
+package online. Reason: Stripe payments are still off everywhere
+(`STRIPE_PAYMENTS_ENABLED=false`, no real test-mode QA done yet per
+`docs/STRIPE_SPEC.md`), so building a *second* live-charge surface
+(package purchase) before the first one (booking deposits/full-pay) has
+even been exercised for real would compound untested payment surface for
+no immediate benefit. Instead, **the admin records the sale** (in-person or
+phone transaction, same as today) via a form on the client's detail page —
+this mirrors the precedent already set for admin-created bookings (§4.4 of
+STRIPE_SPEC.md: "v1 default — skip online card collection"). The "pay in
+full at purchase" open decision still governs the *bookkeeping*
+(`ClientPackage.paidCents` = the full price, no partial/credit-balance
+tracking) — it just doesn't imply the money has to move through a new
+Stripe Elements flow in v1. Once Stripe booking payments are live and QA'd,
+a public purchase page re-using the same Payment Element pattern as
+`PaymentStep.tsx` is a natural follow-up.
+
 **Schema changes** (`salonId` added per the multi-tenant convention — see the
 Waitlist note above):
 ```prisma
@@ -250,6 +290,27 @@ model ClientPackage {
 **Dependencies**: Requires Stripe for purchase. Links to `STRIPE_SPEC.md`.  
 **Effort**: 5–8 days (after Stripe is live).
 
+**Status: ✅ Shipped (2026-07-02)**, per the v1 scope decision above (admin
+records the sale, no online checkout yet).
+- `Package` (admin template, `/admin/packages`) and `ClientPackage` (a
+  client's purchased instance, sold from `/admin/clients/[id]`) models, plus
+  `Appointment.clientPackageId` to record which booking drew down a session.
+- `src/lib/domain/packages.ts`: `findRedeemablePackage` (oldest-first, only
+  when the booking is exactly the package's service with **no add-ons** —
+  no partial-package/partial-card split) and `refundPackageSession`.
+- Wired into both `/api/appointments` (public) and `/api/admin/appointments`
+  — a redeemable package always wins over a Stripe charge when one exists.
+  **Not wired into `/api/appointments/propose`** (the pending-approval
+  flow) — redeeming a session before an admin approves (or declines) the
+  request would need the same refund-on-decline handling Stripe deposits
+  already have, and this pass didn't extend that far.
+- `cancelAppointment` refunds the session (not just Stripe payments) under
+  the exact same refund-eligibility rule already used for Stripe (§5.3):
+  timely client self-cancel always refunds, admin cancel keeps it by default.
+- Admin calendar tags a package-redeemed appointment `(package)`; the client
+  detail page shows owned packages with a `used/total` badge and tags which
+  past appointments drew from one.
+
 #### 8. Loyalty / Stamp Card
 **What**: Client earns 1 stamp per completed appointment. After N stamps (configurable by admin), they earn a reward (free service, discount).  
 **Why it wins**: Booksy's stamp card is their most-cited retention feature in reviews. SimplyBook.me has it. Drives repeat visits.  
@@ -282,11 +343,69 @@ model LoyaltyReward {
 Add to `Setting`: `loyaltyStampsRequired` (int, default 10), `loyaltyRewardDescription` (string).  
 **Effort**: 3–4 days.
 
+**Status: ✅ Shipped (2026-07-02).** `src/lib/domain/loyalty.ts`'s
+`awardLoyaltyStamp` is called from the admin "mark complete" route
+(`/api/admin/appointments/[id]/complete`) — the only place an appointment
+becomes `COMPLETED`. Idempotent via `LoyaltyStamp.appointmentId`'s unique
+constraint (a `P2002` on re-complete is a silent no-op, so no reversal path
+was needed — `cancelAppointment` can't touch an already-`COMPLETED`
+appointment). No stamp-to-reward link is tracked: eligibility is "total
+stamps vs. total rewards ever earned" compared against
+`Setting.loyaltyStampsRequired`, matching the spec's flatter schema.
+Rewards expire 90 days after being earned (a reasonable default, not
+admin-configurable in v1). Admin controls (toggle, stamps-per-reward,
+reward description) live in `/admin/hours`; stamp progress, unredeemed
+rewards, and a "mark redeemed" action live on `/admin/clients/[id]`.
+
 #### 9. Recurring Appointment Scheduling
 **What**: Admin or client can set a booking to repeat (weekly, biweekly, monthly). System auto-creates future appointments within the max-advance window as each prior one completes.  
 **Why it wins**: Acuity's recurring appointments are a top-cited feature for salons with regular clients. Removes friction for the "I come every 3 weeks" client.  
 **Schema changes**: Add `recurrenceRule String?` (iCal RRULE format) and `parentAppointmentId String?` to `Appointment`.  
 **Effort**: 4–6 days.
+
+**Scope decision (2026-07-02), not a formal open decision but worth
+recording:** v1 ships two deliberate simplifications from the sketch above:
+1. **Admin-only** — booked from `/admin/book`, not the public self-service
+   form. Recurring interacts with payments (does each occurrence charge
+   separately? does a declined/failed charge break the series?) and with
+   add-ons/packages in ways that need real design thought; admin bookings
+   already never charge (existing precedent) and never carry add-ons or
+   package redemption, which sidesteps all of that. A public-facing version
+   is a natural follow-up once that design question gets its own pass.
+2. **A simplified 3-value interval (`WEEKLY`/`BIWEEKLY`/`MONTHLY`), not real
+   iCal RRULE syntax.** Full RFC 5545 RRULE (BYDAY, BYSETPOS, exceptions,
+   etc.) is a lot of parsing/generation machinery for three named cadences
+   nobody asked to combine. `recurrenceRule` is a Prisma enum instead of a
+   free string.
+3. **Upfront batch creation, not a rolling "create the next one as each
+   prior completes" cron.** The admin picks a number of occurrences (2–12)
+   at booking time and every appointment in the series is created
+   immediately (each independently conflict-checked — a taken slot is
+   skipped, not a series-blocking error, and the cadence continues from the
+   *original* schedule rather than shifting). This avoids needing a new
+   cron job and a "how far into the future should we auto-generate" policy
+   decision. The tradeoff: a series longer than 12 visits, or one that
+   needs to extend past what was originally requested, means booking a new
+   batch by hand.
+
+**Schema**: `Appointment.recurrenceRule RecurrenceRule?` (set only on the
+first/parent appointment of a series) and `Appointment.parentAppointmentId
+String?` (set on every subsequent occurrence, pointing at that same first
+appointment — a star topology, not a linked list, so finding "the rest of
+the series" is a single query either direction). `onDelete: SetNull` on the
+self-relation so bulk-clearing cancelled appointments can't cascade-delete
+a whole series.
+
+**Status: ✅ Shipped (2026-07-02).** `src/lib/domain/recurring.ts`:
+`nextOccurrenceStart` (the three-cadence date math) and
+`createRecurringSeries` (first-occurrence conflict is a hard 409, later
+conflicts are skipped without shifting the cadence). Wired into
+`/api/admin/appointments` as an alternate path from the single-booking
+flow — mutually exclusive with add-ons at both the Zod schema level
+(`.refine`) and in `AdminBookingForm`'s UI (picking one clears the other).
+Admin calendar and client-history views tag recurring occurrences.
+**This closes out Tier 2** — all four items (#6 multi-service, #7 packages,
+#8 loyalty, #9 recurring) are now shipped.
 
 #### 10. Client-Facing Portal
 **What**: Clients get a login (email magic link) to view their appointment history, current package balance, loyalty stamp count, and upcoming appointments — with self-service reschedule.  
@@ -339,13 +458,13 @@ Phase A — Quick wins (before or alongside Stripe) — ✅ done (2026-07-01)
 
 Phase B — Stripe is now live behind its flag; unblocked
   5. Waitlist management (adds Waitlist schema) — ✅ done (2026-07-02)
-  6. Loyalty / stamp card (adds LoyaltyStamp schema)
+  6. Loyalty / stamp card (adds LoyaltyStamp schema) — ✅ done (2026-07-02, see #8)
   7. Service photo gallery (adds storage)
 
 Phase C — Client retention suite (after multi-tenant foundation)
-  8. Multi-service booking (schema migration)
-  9. Packages / bundles (requires Stripe, Package schema)
- 10. Recurring appointments (adds recurrenceRule to Appointment)
+  8. Multi-service booking (schema migration) — ✅ done (2026-07-02, see #6)
+  9. Packages / bundles (requires Stripe, Package schema) — ✅ done (2026-07-02, see #7)
+ 10. Recurring appointments (adds recurrenceRule to Appointment) — ✅ done (2026-07-02, admin-only, see #9)
 
 Phase D — Growth / differentiation
  11. Client-facing portal (activates Client role in Auth.js)

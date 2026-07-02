@@ -24,6 +24,12 @@ export interface AppSettings {
   waitlistEnabled: boolean;
   /** Minutes a notified waitlist entry has to claim a freed slot. */
   waitlistClaimWindowMinutes: number;
+  /** When true, marking an appointment COMPLETED earns the client a stamp. */
+  loyaltyEnabled: boolean;
+  /** Stamps needed to earn one reward. */
+  loyaltyStampsRequired: number;
+  /** Free-text reward description shown to the client. */
+  loyaltyRewardDescription: string;
 }
 
 export async function getSettings(salonId: string): Promise<AppSettings> {
@@ -46,6 +52,9 @@ export async function getSettings(salonId: string): Promise<AppSettings> {
     reviewRequestUrl: row.reviewRequestUrl,
     waitlistEnabled: row.waitlistEnabled,
     waitlistClaimWindowMinutes: row.waitlistClaimWindowMinutes,
+    loyaltyEnabled: row.loyaltyEnabled,
+    loyaltyStampsRequired: row.loyaltyStampsRequired,
+    loyaltyRewardDescription: row.loyaltyRewardDescription,
   };
 }
 

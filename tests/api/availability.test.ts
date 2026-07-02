@@ -8,14 +8,22 @@
  * `tests/lib/availability.test.ts`.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AddOnServiceLite } from "@/lib/domain/appointmentServices";
 
 const getAvailableSlotsMock = vi.hoisted(() => vi.fn());
 const getPublicSalonMock = vi.hoisted(() => vi.fn());
+const resolveAddOnServicesMock = vi.hoisted(() =>
+  vi.fn(async (): Promise<AddOnServiceLite[] | null> => [])
+);
 vi.mock("@/lib/domain/availability", () => ({
   getAvailableSlots: getAvailableSlotsMock,
 }));
 vi.mock("@/lib/domain/salon", () => ({
   getPublicSalon: getPublicSalonMock,
+}));
+vi.mock("@/lib/domain/appointmentServices", () => ({
+  resolveAddOnServices: resolveAddOnServicesMock,
+  MAX_ADD_ON_SERVICES: 4,
 }));
 
 import { GET } from "@/app/api/availability/route";
@@ -39,6 +47,8 @@ describe("GET /api/availability", () => {
         status: "ACTIVE",
       },
     });
+    getAvailableSlotsMock.mockReset();
+    resolveAddOnServicesMock.mockReset().mockResolvedValue([]);
   });
 
   it("400s on missing query parameters", async () => {
@@ -71,6 +81,33 @@ describe("GET /api/availability", () => {
       salonId: SALON_ID,
       serviceId: "svc_1",
       dateKey: "2026-05-13",
+      additionalDurationMinutes: 0,
     });
+  });
+
+  it("resolves add-on services and passes their combined duration through", async () => {
+    resolveAddOnServicesMock.mockResolvedValueOnce([
+      { id: "svc_2", name: "Pedicure", durationMinutes: 30, priceCents: 3000 },
+      { id: "svc_3", name: "Nail Art", durationMinutes: 15, priceCents: 1000 },
+    ]);
+    getAvailableSlotsMock.mockResolvedValueOnce([]);
+
+    await GET(req("serviceId=svc_1&date=2026-05-13&addOnServiceIds=svc_2,svc_3"));
+
+    expect(resolveAddOnServicesMock).toHaveBeenCalledWith(SALON_ID, "svc_1", ["svc_2", "svc_3"]);
+    expect(getAvailableSlotsMock).toHaveBeenCalledWith({
+      salonId: SALON_ID,
+      serviceId: "svc_1",
+      dateKey: "2026-05-13",
+      additionalDurationMinutes: 45,
+    });
+  });
+
+  it("400s when an add-on service id is invalid", async () => {
+    resolveAddOnServicesMock.mockResolvedValueOnce(null);
+
+    const res = await GET(req("serviceId=svc_1&date=2026-05-13&addOnServiceIds=bad_id"));
+    expect(res.status).toBe(400);
+    expect(getAvailableSlotsMock).not.toHaveBeenCalled();
   });
 });

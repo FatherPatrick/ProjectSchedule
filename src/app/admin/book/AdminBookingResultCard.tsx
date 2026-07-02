@@ -3,10 +3,16 @@ export function AdminBookingResultCard({
   notify,
   onReset,
 }: {
-  done: { when: string; serviceName: string };
+  done: {
+    when: string;
+    serviceName: string;
+    createdCount?: number;
+    skippedCount?: number;
+  };
   notify: boolean;
   onReset: () => void;
 }) {
+  const isRecurring = done.createdCount != null;
   return (
     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
       <h2 className="text-xl font-semibold text-emerald-900">
@@ -17,6 +23,14 @@ export function AdminBookingResultCard({
         <strong>{done.when}</strong>
         {notify ? " — the client has been notified." : "."}
       </p>
+      {isRecurring && (
+        <p className="mt-1 text-emerald-900">
+          Booked {done.createdCount} visit{done.createdCount === 1 ? "" : "s"}{" "}
+          in the series.
+          {Boolean(done.skippedCount) &&
+            ` ${done.skippedCount} occurrence${done.skippedCount === 1 ? "" : "s"} were skipped because that time was already taken.`}
+        </p>
+      )}
       <button
         type="button"
         onClick={onReset}

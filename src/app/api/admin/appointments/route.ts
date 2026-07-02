@@ -10,6 +10,13 @@ import { toE164 } from "@/lib/phone";
 import { formatBiz } from "@/lib/timezone";
 import { adminAppointmentCreateSchema } from "@/lib/validation/appointments";
 import { requireAdminSalon } from "@/lib/auth/admin";
+import {
+  createAppointmentWithAddOns,
+  resolveAddOnServices,
+  totalDurationMinutes,
+} from "@/lib/domain/appointmentServices";
+import { findRedeemablePackage } from "@/lib/domain/packages";
+import { createRecurringSeries } from "@/lib/domain/recurring";
 import type { AppointmentsListResponse } from "@/lib/api-types";
 
 /**
@@ -113,6 +120,10 @@ export const POST = withAdminJson(
     if (!service || !service.active) {
       return NextResponse.json({ error: "Service not found." }, { status: 404 });
     }
+    const addOns = await resolveAddOnServices(salonId, service.id, data.addOnServiceIds);
+    if (!addOns) {
+      return NextResponse.json({ error: "Invalid service selection." }, { status: 400 });
+    }
 
     const startsAt = new Date(data.startISO);
     if (Number.isNaN(startsAt.getTime())) {
@@ -129,29 +140,6 @@ export const POST = withAdminJson(
         { status: 400 }
       );
     }
-    const endsAt = new Date(
-      startsAt.getTime() + service.durationMinutes * 60_000
-    );
-
-    const conflict = await prisma.appointment.findFirst({
-      where: {
-        salonId,
-        startsAt: { lt: endsAt },
-        endsAt: { gt: startsAt },
-        OR: [
-          { status: "CONFIRMED" },
-          { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (conflict) {
-      return NextResponse.json(
-        { error: "That time overlaps an existing confirmed appointment." },
-        { status: 409 }
-      );
-    }
-
     // Resolve the client: an explicit existing id, or upsert-by-email for a new
     // one (mirrors the public booking flow's dedupe).
     let clientId: string;
@@ -192,8 +180,70 @@ export const POST = withAdminJson(
       clientId = client.id;
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
+    // Recurring bookings are their own path — no add-ons, no package
+    // redemption, no charge (docs/FEATURE_OPPORTUNITIES_SPEC.md #9).
+    if (data.recurrence) {
+      const series = await createRecurringSeries({
+        salonId,
+        serviceId: service.id,
+        clientId,
+        firstStartsAt: startsAt,
+        durationMinutes: service.durationMinutes,
+        rule: data.recurrence.rule,
+        occurrences: data.recurrence.occurrences,
+        notes: data.notes,
+      });
+      if (!series.ok) {
+        return NextResponse.json({ error: series.error }, { status: series.status });
+      }
+      if (data.notify) {
+        sendNotifications(series.firstAppointmentId, "CONFIRMATION").catch((err) =>
+          reportError(err, {
+            where: "admin.appointments.create.notify",
+            appointmentId: series.firstAppointmentId,
+          })
+        );
+      }
+      return NextResponse.json({
+        id: series.firstAppointmentId,
+        managementToken: series.managementToken,
+        serviceName: service.name,
+        whenLabel: formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a"),
+        createdCount: series.createdCount,
+        skippedCount: series.skippedDates.length,
+      });
+    }
+
+    const endsAt = new Date(
+      startsAt.getTime() + totalDurationMinutes(service, addOns) * 60_000
+    );
+
+    const conflict = await prisma.appointment.findFirst({
+      where: {
+        salonId,
+        startsAt: { lt: endsAt },
+        endsAt: { gt: startsAt },
+        OR: [
+          { status: "CONFIRMED" },
+          { status: "PENDING_PAYMENT", holdExpiresAt: { gt: new Date() } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (conflict) {
+      return NextResponse.json(
+        { error: "That time overlaps an existing confirmed appointment." },
+        { status: 409 }
+      );
+    }
+
+    // Same package-redemption rule as the public booking route: only when
+    // there's no add-on mix (docs/FEATURE_OPPORTUNITIES_SPEC.md #7).
+    const redeemable =
+      addOns.length === 0 ? await findRedeemablePackage(salonId, clientId, service.id) : null;
+
+    const appointment = await createAppointmentWithAddOns(
+      {
         salonId,
         serviceId: service.id,
         clientId,
@@ -202,8 +252,11 @@ export const POST = withAdminJson(
         status: "CONFIRMED",
         managementToken: nanoid(24),
         notes: data.notes,
+        ...(redeemable ? { clientPackageId: redeemable.id } : {}),
       },
-    });
+      addOns,
+      redeemable?.id
+    );
 
     if (data.notify) {
       sendNotifications(appointment.id, "CONFIRMATION").catch((err) =>

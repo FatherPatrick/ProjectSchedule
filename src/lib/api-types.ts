@@ -115,6 +115,11 @@ export type ClientSearchResponse = DataResponse<ClientLiteDTO[]>;
  */
 export type AdminAppointmentCreateInput = {
   serviceId: string;
+  /** Extra services bundled into the same visit (docs/FEATURE_OPPORTUNITIES_SPEC.md #6).
+   *  Mutually exclusive with `recurrence`. */
+  addOnServiceIds?: string[];
+  /** Book a repeating series instead of a single visit (docs/FEATURE_OPPORTUNITIES_SPEC.md #9). */
+  recurrence?: { rule: "WEEKLY" | "BIWEEKLY" | "MONTHLY"; occurrences: number };
   /** ISO timestamp (UTC). */
   startISO: string;
   clientId?: string;
@@ -133,6 +138,10 @@ export type BookingCreatedResponse = {
   managementToken: string;
   serviceName: string;
   whenLabel: string;
+  /** Present only when this was a `recurrence` request. */
+  createdCount?: number;
+  /** Occurrences skipped due to a conflicting slot. */
+  skippedCount?: number;
 };
 
 /**

@@ -16,9 +16,13 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     deleteMany: vi.fn(),
   },
-  service: { findUnique: vi.fn() },
+  appointmentAddOn: { createMany: vi.fn() },
+  clientPackage: { findMany: vi.fn(async () => []) },
+  service: { findUnique: vi.fn(), findMany: vi.fn() },
   client: { findUnique: vi.fn(), upsert: vi.fn() },
+  $transaction: vi.fn(),
 }));
+prismaMock.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prismaMock));
 const approveMock = vi.hoisted(() => vi.fn());
 const cancelMock = vi.hoisted(() => vi.fn());
 const findClientIdByEmailMock = vi.hoisted(() => vi.fn());
@@ -336,6 +340,47 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
   });
 });
 
+describe("POST /api/admin/appointments — recurring bookings", () => {
+  const RECURRING_BODY = {
+    serviceId: "svc_1",
+    startISO: ADMIN_FUTURE_ISO,
+    clientId: "client_1",
+    recurrence: { rule: "WEEKLY" as const, occurrences: 3 },
+  };
+
+  it("400s when add-ons are combined with a recurrence request", async () => {
+    const res = await POST(
+      createReq({ ...RECURRING_BODY, addOnServiceIds: ["svc_2"] })
+    );
+    expect(res.status).toBe(400);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+  it("400s on an occurrence count outside 2–12", async () => {
+    const res = await POST(
+      createReq({ ...RECURRING_BODY, recurrence: { rule: "WEEKLY", occurrences: 1 } })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("books every occurrence and returns createdCount/skippedCount", async () => {
+    const res = await POST(createReq(RECURRING_BODY));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { createdCount: number; skippedCount: number };
+    expect(body.createdCount).toBe(3);
+    expect(body.skippedCount).toBe(0);
+    expect(prismaMock.appointment.create).toHaveBeenCalledTimes(3);
+    expect(sendNotificationsMock).toHaveBeenCalledWith("appt_new", "CONFIRMATION");
+  });
+
+  it("409s when the first occurrence's slot is already taken, without creating any of the series", async () => {
+    prismaMock.appointment.findFirst.mockResolvedValueOnce({ id: "existing" });
+    const res = await POST(createReq(RECURRING_BODY));
+    expect(res.status).toBe(409);
+    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+  });
+
+});
 
 describe("POST /api/admin/appointments/clear-cancelled", () => {
   function call(): Promise<Response> {

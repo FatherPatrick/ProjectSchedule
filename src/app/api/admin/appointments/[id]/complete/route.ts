@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/http/withAdmin";
 import { prisma } from "@/lib/db/prisma";
 import { getSettings } from "@/lib/domain/settings";
+import { awardLoyaltyStamp } from "@/lib/domain/loyalty";
 import { requireAdminSalon } from "@/lib/auth/admin";
+import { reportError } from "@/lib/observability/reportError";
 import { sendReviewRequest } from "@/lib/integrations/notifications";
 
 export const POST = withAdmin(
@@ -35,6 +37,9 @@ export const POST = withAdmin(
     if (settings.reviewRequestEnabled && settings.reviewRequestUrl) {
       sendReviewRequest(id, settings.reviewRequestUrl).catch(() => {});
     }
+    awardLoyaltyStamp(salonId, appt.clientId, id).catch((err) =>
+      reportError(err, { where: "admin.appointments.complete.loyalty", appointmentId: id })
+    );
 
     return NextResponse.json({ ok: true });
   }

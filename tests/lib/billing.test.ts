@@ -104,7 +104,11 @@ describe("listPayments", () => {
         status: "SUCCEEDED",
         createdAt: new Date("2026-06-01T00:00:00Z"),
         stripePaymentIntentId: "pi_1",
-        appointment: { client: { name: "Pat Smith" }, service: { name: "Manicure" } },
+        appointment: {
+          client: { name: "Pat Smith" },
+          service: { name: "Manicure" },
+          addOns: [],
+        },
       },
     ]);
 
@@ -122,6 +126,28 @@ describe("listPayments", () => {
         stripePaymentIntentId: "pi_1",
       },
     ]);
+  });
+
+  it("joins add-on service names onto a multi-service booking's row", async () => {
+    prismaMock.payment.findMany.mockResolvedValueOnce([
+      {
+        id: "pay_2",
+        amountCents: 5_000,
+        refundedCents: 0,
+        currency: "usd",
+        status: "SUCCEEDED",
+        createdAt: new Date("2026-06-01T00:00:00Z"),
+        stripePaymentIntentId: "pi_2",
+        appointment: {
+          client: { name: "Pat Smith" },
+          service: { name: "Gel Manicure" },
+          addOns: [{ service: { name: "Pedicure" } }, { service: { name: "Nail Art" } }],
+        },
+      },
+    ]);
+
+    const rows = await listPayments(SALON_ID, RANGE);
+    expect(rows[0].serviceName).toBe("Gel Manicure + Pedicure + Nail Art");
   });
 
   it("caps the query at 50 rows, newest first", async () => {

@@ -16,12 +16,14 @@ const sendNotificationsMock = vi.hoisted(() => vi.fn(async () => undefined));
 const reportErrorMock = vi.hoisted(() => vi.fn());
 const refundPaymentMock = vi.hoisted(() => vi.fn());
 const notifyWaitlistOfOpeningMock = vi.hoisted(() => vi.fn(async () => false));
+const refundPackageSessionMock = vi.hoisted(() => vi.fn(async () => undefined));
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/integrations/notifications", () => ({ sendNotifications: sendNotificationsMock }));
 vi.mock("@/lib/observability/reportError", () => ({ reportError: reportErrorMock }));
 vi.mock("@/lib/domain/payments", () => ({ refundPayment: refundPaymentMock }));
 vi.mock("@/lib/domain/waitlist", () => ({ notifyWaitlistOfOpening: notifyWaitlistOfOpeningMock }));
+vi.mock("@/lib/domain/packages", () => ({ refundPackageSession: refundPackageSessionMock }));
 
 import { cancelAppointment } from "@/lib/domain/appointments";
 
@@ -59,6 +61,7 @@ beforeEach(() => {
   prismaMock.appointment.findUnique.mockReset();
   prismaMock.appointment.update.mockReset().mockResolvedValue({});
   prismaMock.payment.findFirst.mockReset();
+  refundPackageSessionMock.mockClear();
   sendNotificationsMock.mockClear();
   reportErrorMock.mockClear();
   refundPaymentMock.mockReset().mockResolvedValue({ ok: true });
@@ -163,5 +166,61 @@ describe("cancelAppointment — waitlist notification", () => {
     await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: true });
 
     expect(notifyWaitlistOfOpeningMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelAppointment — package session refund", () => {
+  it("gives the session back on a timely client self-cancel of a package-redeemed booking", async () => {
+    prismaMock.appointment.findUnique.mockResolvedValueOnce({
+      ...confirmedAppt(),
+      clientPackageId: "cp_1",
+    });
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+
+    const result = await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: false });
+
+    expect(result).toEqual({ ok: true });
+    expect(refundPackageSessionMock).toHaveBeenCalledWith("cp_1");
+  });
+
+  it("keeps the session on an admin cancel by default (no-show / late-cancel forfeit)", async () => {
+    prismaMock.appointment.findUnique.mockResolvedValueOnce({
+      ...confirmedAppt(),
+      clientPackageId: "cp_1",
+    });
+
+    await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: true });
+
+    expect(refundPackageSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the appointment wasn't paid for with a package", async () => {
+    prismaMock.appointment.findUnique.mockResolvedValueOnce(confirmedAppt());
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+
+    await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: false });
+
+    expect(refundPackageSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("still cancels (and reports) when the package refund itself fails", async () => {
+    prismaMock.appointment.findUnique.mockResolvedValueOnce({
+      ...confirmedAppt(),
+      clientPackageId: "cp_1",
+    });
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+    refundPackageSessionMock.mockRejectedValueOnce(new Error("db hiccup"));
+
+    const result = await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: false });
+
+    expect(result).toEqual({ ok: true });
+    expect(reportErrorMock).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        where: "appointments.cancel.packageRefund",
+        appointmentId: APPT_ID,
+        clientPackageId: "cp_1",
+      })
+    );
   });
 });

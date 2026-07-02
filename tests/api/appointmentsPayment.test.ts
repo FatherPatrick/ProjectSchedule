@@ -19,11 +19,15 @@ const SALON_SLUG = "test-salon";
 
 const prismaMock = vi.hoisted(() => ({
   salon: { findUnique: vi.fn() },
-  service: { findUnique: vi.fn() },
+  service: { findUnique: vi.fn(), findMany: vi.fn() },
   appointment: { findFirst: vi.fn(), create: vi.fn() },
+  appointmentAddOn: { createMany: vi.fn() },
+  clientPackage: { findMany: vi.fn(async () => []) },
   client: { upsert: vi.fn() },
   setting: { upsert: vi.fn() },
+  $transaction: vi.fn(),
 }));
+prismaMock.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prismaMock));
 const isStripePaymentsEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const getBookingPaymentContextMock = vi.hoisted(() => vi.fn());
 const amountForBookingMock = vi.hoisted(() => vi.fn());

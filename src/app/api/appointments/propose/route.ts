@@ -22,6 +22,12 @@ import {
   getBookingPaymentContext,
   PAYMENT_HOLD_MINUTES,
 } from "@/lib/domain/payments";
+import {
+  createAppointmentWithAddOns,
+  resolveAddOnServices,
+  totalDurationMinutes,
+  totalPriceCents,
+} from "@/lib/domain/appointmentServices";
 import type { PublicBookingResponse } from "@/lib/api-types";
 
 const MIN_LEAD_MS = 24 * 60 * 60 * 1000;
@@ -62,6 +68,10 @@ export async function POST(req: Request) {
   if (!service || !service.active || service.salonId !== salon.id) {
     return NextResponse.json({ error: "Service not found." }, { status: 404 });
   }
+  const addOns = await resolveAddOnServices(salon.id, service.id, data.addOnServiceIds);
+  if (!addOns) {
+    return NextResponse.json({ error: "Invalid service selection." }, { status: 400 });
+  }
 
   const startsAt = new Date(data.startISO);
   if (Number.isNaN(startsAt.getTime())) {
@@ -84,7 +94,7 @@ export async function POST(req: Request) {
     );
   }
   const endsAt = new Date(
-    startsAt.getTime() + service.durationMinutes * 60_000
+    startsAt.getTime() + totalDurationMinutes(service, addOns) * 60_000
   );
 
   // Don't let proposals overlap an existing CONFIRMED appointment (or an
@@ -138,11 +148,11 @@ export async function POST(req: Request) {
     : null;
   const charge =
     paymentCtx?.stripeAccountId && paymentCtx.stripeChargesEnabled
-      ? amountForBooking(paymentCtx, service)
+      ? amountForBooking(paymentCtx, { priceCents: totalPriceCents(service, addOns) })
       : null;
 
-  const appointment = await prisma.appointment.create({
-    data: {
+  const appointment = await createAppointmentWithAddOns(
+    {
       salonId: salon.id,
       serviceId: service.id,
       clientId: client.id,
@@ -155,7 +165,8 @@ export async function POST(req: Request) {
         ? { holdExpiresAt: new Date(Date.now() + PAYMENT_HOLD_MINUTES * 60_000) }
         : {}),
     },
-  });
+    addOns
+  );
 
   const shortWhenLabel = formatBiz(startsAt, "EEE MMM d, h:mm a", salon.timezone);
   const whenLabel = formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone);

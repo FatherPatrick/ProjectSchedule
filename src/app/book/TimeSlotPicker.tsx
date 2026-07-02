@@ -51,7 +51,7 @@ export function TimeSlotPicker({
 }: TimeSlotPickerProps) {
   return (
     <Card as="fieldset" className="space-y-3">
-      <legend className="px-2 text-sm font-medium">3. Pick a time</legend>
+      <legend className="px-2 text-sm font-medium">4. Pick a time</legend>
       {slotsLoading ? (
         <p className="text-sm text-neutral-500">Loading times…</p>
       ) : displaySlots.length === 0 ? (

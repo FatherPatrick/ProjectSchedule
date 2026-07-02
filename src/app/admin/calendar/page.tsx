@@ -27,6 +27,7 @@ export default async function AdminCalendar() {
         client: true,
         service: true,
         payments: { select: { status: true } },
+        addOns: { include: { service: true }, orderBy: { sortOrder: "asc" } },
       },
     }),
     prisma.appointment.count({ where: { salonId, status: "CANCELLED" } }),
@@ -34,6 +35,11 @@ export default async function AdminCalendar() {
 
   const pending = appts.filter((a) => a.status === "PENDING");
   const scheduled = appts.filter((a) => a.status !== "PENDING");
+
+  /** "Gel Manicure + Pedicure" for a multi-service booking. */
+  function serviceLabel(a: (typeof appts)[number]): string {
+    return [a.service.name, ...a.addOns.map((x) => x.service.name)].join(" + ");
+  }
 
   const grouped = new Map<string, typeof appts>();
   for (const a of scheduled) {
@@ -73,7 +79,7 @@ export default async function AdminCalendar() {
                     </Link>
                   </div>
                   <div className="text-sm text-neutral-500">
-                    {a.service.name} · {a.client.email}
+                    {serviceLabel(a)} · {a.client.email}
                     {a.client.phone ? ` · ${a.client.phone}` : ""}
                   </div>
                   {a.notes && (
@@ -124,7 +130,13 @@ export default async function AdminCalendar() {
                     </Link>
                   </div>
                   <div className="text-sm text-neutral-500">
-                    {a.service.name}
+                    {serviceLabel(a)}
+                    {a.clientPackageId && (
+                      <span className="ml-2 text-brand">(package)</span>
+                    )}
+                    {(a.recurrenceRule || a.parentAppointmentId) && (
+                      <span className="ml-2 text-neutral-400">(recurring)</span>
+                    )}
                     {a.status === "CANCELLED" && (
                       <span className="ml-2 text-red-600">(cancelled)</span>
                     )}

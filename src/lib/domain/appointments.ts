@@ -5,6 +5,7 @@ import { reportError } from "../observability/reportError";
 import { CANCELLATION_WINDOW_HOURS } from "../config";
 import { refundPayment } from "./payments";
 import { notifyWaitlistOfOpening } from "./waitlist";
+import { refundPackageSession } from "./packages";
 
 /**
  * Result type for appointment state-change operations. Lets callers translate
@@ -218,6 +219,18 @@ export async function cancelAppointment(
           paymentId: payment.id,
         });
       }
+    }
+    // Same refund policy applies to a booking paid for out of a prepaid
+    // package (docs/FEATURE_OPPORTUNITIES_SPEC.md #7) — give the session
+    // back rather than leaving it silently consumed.
+    if (appt.clientPackageId) {
+      await refundPackageSession(appt.clientPackageId).catch((err) =>
+        reportError(err, {
+          where: "appointments.cancel.packageRefund",
+          appointmentId: id,
+          clientPackageId: appt.clientPackageId,
+        })
+      );
     }
   }
 

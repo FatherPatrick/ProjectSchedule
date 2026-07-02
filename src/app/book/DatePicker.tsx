@@ -23,7 +23,7 @@ export function DatePicker({
 }) {
   return (
     <Card as="fieldset">
-      <legend className="px-2 text-sm font-medium">2. Pick a date</legend>
+      <legend className="px-2 text-sm font-medium">3. Pick a date</legend>
       <div className="overflow-x-auto">
         <DayPicker
           mode="single"

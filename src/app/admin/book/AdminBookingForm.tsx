@@ -7,14 +7,22 @@ import { notifyAdminToast } from "@/app/admin/AdminToaster";
 import { formatDuration, formatPrice, localDateKey } from "@/lib/utils";
 import type { ClientLiteDTO, ClientSearchResponse } from "@/lib/api-types";
 import { ServiceSelector } from "./ServiceSelector";
+import { AddOnSelector } from "./AddOnSelector";
+import { RecurrenceSelector } from "./RecurrenceSelector";
 import { DateTimeFields } from "./DateTimeFields";
 import { ClientSelector } from "./ClientSelector";
 import { OptionsPanel } from "./OptionsPanel";
 import { AdminBookingResultCard } from "./AdminBookingResultCard";
-import type { ClientMode, ServiceLite } from "./types";
+import type { ClientMode, RecurrenceRule, ServiceLite } from "./types";
+
+const DEFAULT_OCCURRENCES = 4;
 
 export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  const [addOnServiceIds, setAddOnServiceIds] = useState<string[]>([]);
+  const addOnCandidates = services.filter((s) => s.id !== serviceId);
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule | "">("");
+  const [occurrences, setOccurrences] = useState(DEFAULT_OCCURRENCES);
   const [date, setDate] = useState("");
   // Default to 9:00 AM so the field matches what the time picker displays —
   // otherwise it *looks* like 9:00 is chosen but no value is set until a click.
@@ -36,9 +44,12 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ when: string; serviceName: string } | null>(
-    null
-  );
+  const [done, setDone] = useState<{
+    when: string;
+    serviceName: string;
+    createdCount?: number;
+    skippedCount?: number;
+  } | null>(null);
 
   // Local YYYY-MM-DD for the date input's min. Computed once at mount.
   const todayKey = useState(() => localDateKey(new Date()))[0];
@@ -99,10 +110,13 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
       return;
     }
 
+    const recurrence = recurrenceRule ? { rule: recurrenceRule, occurrences } : undefined;
     const body =
       mode === "existing"
         ? {
             serviceId,
+            addOnServiceIds: recurrence ? undefined : addOnServiceIds,
+            recurrence,
             startISO: local.toISOString(),
             clientId: selected!.id,
             notify,
@@ -110,6 +124,8 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
           }
         : {
             serviceId,
+            addOnServiceIds: recurrence ? undefined : addOnServiceIds,
+            recurrence,
             startISO: local.toISOString(),
             name,
             phone,
@@ -128,7 +144,12 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not book.");
       notifyAdminToast({ message: "Appointment booked." });
-      setDone({ when: data.whenLabel, serviceName: data.serviceName });
+      setDone({
+        when: data.whenLabel,
+        serviceName: data.serviceName,
+        createdCount: data.createdCount,
+        skippedCount: data.skippedCount,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
@@ -140,6 +161,9 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
 
   function reset() {
     setDone(null);
+    setAddOnServiceIds([]);
+    setRecurrenceRule("");
+    setOccurrences(DEFAULT_OCCURRENCES);
     setDate("");
     setTime("");
     setNotes("");
@@ -163,8 +187,34 @@ export function AdminBookingForm({ services }: { services: ServiceLite[] }) {
     <form onSubmit={submit} className="space-y-5">
       <ServiceSelector
         value={serviceId}
-        onChange={setServiceId}
+        onChange={(id) => {
+          setServiceId(id);
+          setAddOnServiceIds((prev) => prev.filter((x) => x !== id));
+        }}
         options={serviceOptions}
+      />
+
+      {!recurrenceRule && (
+        <AddOnSelector
+          addOns={addOnCandidates}
+          selectedIds={addOnServiceIds}
+          onToggle={(id) =>
+            setAddOnServiceIds((prev) =>
+              prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+            )
+          }
+        />
+      )}
+
+      <RecurrenceSelector
+        rule={recurrenceRule}
+        occurrences={occurrences}
+        disabled={addOnServiceIds.length > 0}
+        onRuleChange={(rule) => {
+          setRecurrenceRule(rule);
+          if (rule) setAddOnServiceIds([]);
+        }}
+        onOccurrencesChange={setOccurrences}
       />
 
       <DateTimeFields

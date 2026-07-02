@@ -45,6 +45,13 @@ const MAX_ADVANCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "none", label: "No limit" },
 ];
 
+const LOYALTY_STAMPS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "5", label: "5 stamps" },
+  { value: "8", label: "8 stamps" },
+  { value: "10", label: "10 stamps" },
+  { value: "15", label: "15 stamps" },
+];
+
 const WAITLIST_WINDOW_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "15", label: "15 minutes" },
   { value: "30", label: "30 minutes" },
@@ -158,6 +165,28 @@ async function saveWaitlistSettings(formData: FormData) {
     await updateSettings(salonId, {
       waitlistEnabled: enabled,
       waitlistClaimWindowMinutes: Number(windowRaw),
+    });
+  });
+}
+
+async function saveLoyaltySettings(formData: FormData) {
+  "use server";
+  await adminAction("/admin/hours", "loyalty", async () => {
+    const salonId = await getAdminSalonId();
+    const enabled = formData.get("loyaltyEnabled") === "on";
+    const stampsRaw = formData.get("loyaltyStampsRequired");
+    const allowed = new Set(LOYALTY_STAMPS_OPTIONS.map((o) => o.value));
+    if (typeof stampsRaw !== "string" || !allowed.has(stampsRaw)) {
+      throw new Error("Choose a valid stamp count.");
+    }
+    const description = (formData.get("loyaltyRewardDescription") as string | null)?.trim();
+    if (!description) {
+      throw new Error("Enter a reward description.");
+    }
+    await updateSettings(salonId, {
+      loyaltyEnabled: enabled,
+      loyaltyStampsRequired: Number(stampsRaw),
+      loyaltyRewardDescription: description,
     });
   });
 }
@@ -368,6 +397,64 @@ export default async function HoursAdmin({
         </div>
 
         <Button type="submit">Save waitlist settings</Button>
+      </Card>
+
+      <Card
+        as="form"
+        key={`loyalty-${settings.loyaltyEnabled}-${settings.loyaltyStampsRequired}-${settings.loyaltyRewardDescription}`}
+        action={saveLoyaltySettings}
+        className="space-y-4"
+      >
+        <UnsavedChangesGuard />
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Loyalty stamps</h2>
+          <p className="text-sm text-neutral-600">
+            Award a stamp every time you mark an appointment complete. Once a
+            client crosses the stamp count below, they&apos;re emailed/texted
+            that they&apos;ve earned a reward — mark it redeemed from their
+            client page when they cash it in.
+          </p>
+        </div>
+
+        <label className="flex items-center gap-3 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            name="loyaltyEnabled"
+            defaultChecked={settings.loyaltyEnabled}
+            className="rounded border-neutral-300"
+          />
+          <span>Award stamps for completed appointments</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Stamps per reward
+          </label>
+          <PrettySelect
+            key={settings.loyaltyStampsRequired}
+            name="loyaltyStampsRequired"
+            ariaLabel="Stamps per reward"
+            defaultValue={String(settings.loyaltyStampsRequired)}
+            triggerClassName="min-w-[14rem]"
+            options={LOYALTY_STAMPS_OPTIONS}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1" htmlFor="loyaltyRewardDescription">
+            Reward description
+          </label>
+          <input
+            id="loyaltyRewardDescription"
+            type="text"
+            name="loyaltyRewardDescription"
+            defaultValue={settings.loyaltyRewardDescription}
+            placeholder="Free gel manicure"
+            className="w-full max-w-md rounded-lg border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+        </div>
+
+        <Button type="submit">Save loyalty settings</Button>
       </Card>
 
       <Card as="section" className="space-y-4">

@@ -29,7 +29,7 @@ export function ContactFields({
 }: ContactFieldsProps) {
   return (
     <Card as="fieldset" className="space-y-3">
-      <legend className="px-2 text-sm font-medium">4. Your info</legend>
+      <legend className="px-2 text-sm font-medium">5. Your info</legend>
       <TextInput
         required
         placeholder="Full name"

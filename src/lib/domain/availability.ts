@@ -69,14 +69,21 @@ export async function getAvailableSlots(opts: {
   serviceId: string;
   /** YYYY-MM-DD in business timezone. */
   dateKey: string;
+  /**
+   * Extra minutes to block for add-on services bundled into the same visit
+   * (docs/FEATURE_OPPORTUNITIES_SPEC.md #6). The caller resolves + validates
+   * the add-on services; this just needs their combined duration.
+   */
+  additionalDurationMinutes?: number;
 }): Promise<Slot[]> {
-  const { salonId, serviceId, dateKey } = opts;
+  const { salonId, serviceId, dateKey, additionalDurationMinutes = 0 } = opts;
 
   const [service, settings] = await Promise.all([
     prisma.service.findUnique({ where: { id: serviceId } }),
     getSettings(salonId),
   ]);
   if (!service || !service.active) return [];
+  const durationMinutes = service.durationMinutes + additionalDurationMinutes;
 
   // Determine the day's business hours.
   const dateMidUTC = bizWallClockToUTC(dateKey, 12 * 60); // noon to avoid DST edges
@@ -124,7 +131,7 @@ export async function getAvailableSlots(opts: {
   const slots: Slot[] = [];
 
   // Last possible start so the appointment ends by closeMin.
-  const lastStart = hours.closeMin - service.durationMinutes;
+  const lastStart = hours.closeMin - durationMinutes;
 
   for (
     let m = hours.openMin;
@@ -132,7 +139,7 @@ export async function getAvailableSlots(opts: {
     m += settings.slotGranularityMin
   ) {
     const start = bizWallClockToUTC(dateKey, m);
-    const end = new Date(start.getTime() + service.durationMinutes * 60_000);
+    const end = new Date(start.getTime() + durationMinutes * 60_000);
 
     if (start <= now) continue; // no past slots
     if (maxStart && start > maxStart) continue; // beyond the book-out window

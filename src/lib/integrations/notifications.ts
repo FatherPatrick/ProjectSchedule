@@ -10,6 +10,7 @@ import type {
   Service,
   Salon,
   Waitlist,
+  LoyaltyReward,
   NotificationKind,
 } from "@prisma/client";
 
@@ -17,8 +18,20 @@ type SalonFields = Pick<
   Salon,
   "name" | "instagram" | "slug" | "timezone" | "brandColor" | "logoUrl"
 >;
-type Bundle = Appointment & { client: Client; service: Service; salon: SalonFields };
+type Bundle = Appointment & {
+  client: Client;
+  service: Service;
+  salon: SalonFields;
+  addOns: { service: Service }[];
+};
 type WaitlistBundle = Waitlist & { client: Client; service: Service; salon: SalonFields };
+type LoyaltyRewardBundle = LoyaltyReward & { client: Client; salon: SalonFields };
+
+/** "Gel Manicure" or "Gel Manicure + Pedicure" for a multi-service booking
+ *  (docs/FEATURE_OPPORTUNITIES_SPEC.md #6). */
+function serviceListLabel(b: Bundle): string {
+  return [b.service.name, ...b.addOns.map((a) => a.service.name)].join(" + ");
+}
 
 const PLATFORM_DEFAULT_BRAND = "#db2777";
 
@@ -51,13 +64,17 @@ function rebookUrl(slug: string, serviceId: string) {
   return `${salonAppUrl(slug)}/book?serviceId=${serviceId}`;
 }
 
+function bookingUrl(slug: string) {
+  return `${salonAppUrl(slug)}/book`;
+}
+
 /** Format a Date to iCal UTC string: YYYYMMDDTHHmmssZ */
 function toIcalDate(d: Date): string {
   return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 }
 
 function googleCalendarUrl(b: Bundle, manageLink: string): string {
-  const title = `${b.service.name} at ${b.salon.name}`;
+  const title = `${serviceListLabel(b)} at ${b.salon.name}`;
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: title,
@@ -148,10 +165,10 @@ function buildClientMessage(b: Bundle, lead: string) {
 function confirmationCopy(b: Bundle) {
   const when = fmtWhen(b.startsAt, b.salon.timezone);
   return {
-    subject: `Confirmed: ${b.service.name} on ${when}`,
+    subject: `Confirmed: ${serviceListLabel(b)} on ${when}`,
     ...buildClientMessage(
       b,
-      `Your ${b.service.name} appointment is confirmed for: ${when}`
+      `Your ${serviceListLabel(b)} appointment is confirmed for: ${when}`
     ),
   };
 }
@@ -159,7 +176,7 @@ function confirmationCopy(b: Bundle) {
 function reminderCopy(b: Bundle) {
   const when = fmtWhen(b.startsAt, b.salon.timezone);
   return {
-    subject: `Reminder: ${b.service.name} on ${when}`,
+    subject: `Reminder: ${serviceListLabel(b)} on ${when}`,
     ...buildClientMessage(
       b,
       `Just a friendly reminder for your upcoming nail appointment on: ${when}`
@@ -170,9 +187,10 @@ function reminderCopy(b: Bundle) {
 function reviewRequestCopy(b: Bundle, reviewUrl: string) {
   const when = fmtWhen(b.startsAt, b.salon.timezone);
   const reUrl = rebookUrl(b.salon.slug, b.service.id);
+  const label = serviceListLabel(b);
   const text = [
     `Hi ${b.client.name}!`,
-    `Thank you so much for your ${b.service.name} appointment on ${when}. We hope you love your nails!`,
+    `Thank you so much for your ${label} appointment on ${when}. We hope you love your nails!`,
     `If you have a moment, we'd love it if you left us a review — it helps us so much:`,
     reviewUrl,
     `We'd love to see you again soon. Book your next appointment here:`,
@@ -185,14 +203,14 @@ function reviewRequestCopy(b: Bundle, reviewUrl: string) {
   const html =
     logoBlockHtml(b.salon) +
     `<p>Hi ${escapeHtml(b.client.name)}!</p>` +
-    `<p>Thank you so much for your <strong>${escapeHtml(b.service.name)}</strong> appointment on ${escapeHtml(when)}. We hope you love your nails!</p>` +
+    `<p>Thank you so much for your <strong>${escapeHtml(label)}</strong> appointment on ${escapeHtml(when)}. We hope you love your nails!</p>` +
     `<p>If you have a moment, we'd love it if you left us a review — it helps us so much:</p>` +
     `<p><a href="${reviewUrl}" style="${brandButtonStyle(b.salon)}">Leave a review</a></p>` +
     `<p>We'd love to see you again soon. <a href="${reUrl}" style="${linkStyle}">Book your next appointment</a></p>` +
     `<p>Xoxo💋<br/>${escapeHtml(b.salon.name)}</p>`;
 
   const sms =
-    `${b.salon.name}: Thanks for your ${b.service.name} on ${when}! ` +
+    `${b.salon.name}: Thanks for your ${label} on ${when}! ` +
     `Would you mind leaving us a review? ${reviewUrl} ` +
     `Book again: ${reUrl}`;
 
@@ -216,11 +234,12 @@ function cancellationCopy(b: Bundle, note?: string) {
         .join("<br/>")}</p>`
     : "";
   const noteBlockSms = note ? ` Note: ${note}` : "";
+  const label = serviceListLabel(b);
   return {
-    subject: `Cancelled: ${b.service.name} on ${when}`,
-    text: `Your ${b.service.name} appointment ${when} has been cancelled.${noteBlockText}`,
-    html: `${logoBlockHtml(b.salon)}<p>Your <strong>${b.service.name}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
-    sms: `${b.salon.name}: your ${b.service.name} appointment ${when} has been cancelled.${noteBlockSms}`,
+    subject: `Cancelled: ${label} on ${when}`,
+    text: `Your ${label} appointment ${when} has been cancelled.${noteBlockText}`,
+    html: `${logoBlockHtml(b.salon)}<p>Your <strong>${label}</strong> appointment ${when} has been cancelled.</p>${noteBlockHtml}`,
+    sms: `${b.salon.name}: your ${label} appointment ${when} has been cancelled.${noteBlockSms}`,
   };
 }
 
@@ -256,6 +275,35 @@ function waitlistOfferCopy(entry: WaitlistBundle) {
   };
 }
 
+function loyaltyRewardCopy(reward: LoyaltyRewardBundle) {
+  const bookUrl = bookingUrl(reward.salon.slug);
+  const text = [
+    `Hi ${reward.client.name}!`,
+    `You've earned a loyalty reward at ${reward.salon.name}: ${reward.description}.`,
+    `Just mention it at your next visit to redeem it.`,
+    `Book your next appointment here:`,
+    bookUrl,
+  ].join("\n\n");
+
+  const html =
+    logoBlockHtml(reward.salon) +
+    `<p>Hi ${escapeHtml(reward.client.name)}!</p>` +
+    `<p>You've earned a loyalty reward at ${escapeHtml(reward.salon.name)}: <strong>${escapeHtml(reward.description)}</strong>.</p>` +
+    `<p>Just mention it at your next visit to redeem it.</p>` +
+    `<p><a href="${bookUrl}" style="${brandButtonStyle(reward.salon)}">Book your next appointment</a></p>`;
+
+  const sms =
+    `${reward.salon.name}: You earned a loyalty reward — ${reward.description}! ` +
+    `Mention it at your next visit. Book: ${bookUrl}`;
+
+  return {
+    subject: `You earned a reward at ${reward.salon.name}!`,
+    text,
+    html,
+    sms,
+  };
+}
+
 const SALON_SELECT = {
   name: true,
   instagram: true,
@@ -275,7 +323,12 @@ export async function sendReviewRequest(
 ) {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    include: { client: true, service: true, salon: { select: SALON_SELECT } },
+    include: {
+      client: true,
+      service: true,
+      salon: { select: SALON_SELECT },
+      addOns: { include: { service: true }, orderBy: { sortOrder: "asc" } },
+    },
   });
   if (!appt) return;
 
@@ -354,6 +407,33 @@ export async function sendWaitlistOffer(waitlistId: string) {
   }
 }
 
+/**
+ * Notify a client they've earned a loyalty reward (docs/FEATURE_OPPORTUNITIES_SPEC.md
+ * #8). Best-effort, same reasoning as `sendWaitlistOffer` — no `Appointment`
+ * to log this against.
+ */
+export async function sendLoyaltyRewardEarned(rewardId: string) {
+  const reward = await prisma.loyaltyReward.findUnique({
+    where: { id: rewardId },
+    include: { client: true, salon: { select: SALON_SELECT } },
+  });
+  if (!reward) return;
+
+  const copy = loyaltyRewardCopy(reward);
+
+  if (reward.client.emailOptIn && reward.client.email) {
+    await sendEmail({
+      to: reward.client.email,
+      subject: copy.subject,
+      html: copy.html,
+      text: copy.text,
+    }).catch(() => {});
+  }
+  if (reward.client.smsOptIn && reward.client.phone) {
+    await sendSMS({ to: reward.client.phone, body: withSmsFooter(copy.sms) }).catch(() => {});
+  }
+}
+
 export async function sendNotifications(
   appointmentId: string,
   kind: NotificationKind,
@@ -361,7 +441,12 @@ export async function sendNotifications(
 ) {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    include: { client: true, service: true, salon: { select: SALON_SELECT } },
+    include: {
+      client: true,
+      service: true,
+      salon: { select: SALON_SELECT },
+      addOns: { include: { service: true }, orderBy: { sortOrder: "asc" } },
+    },
   });
   if (!appt) return;
 

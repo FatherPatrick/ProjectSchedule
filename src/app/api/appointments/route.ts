@@ -14,6 +14,13 @@ import {
 import { formatBiz } from "@/lib/timezone";
 import { appointmentRequestSchema } from "@/lib/validation/appointments";
 import {
+  createAppointmentWithAddOns,
+  resolveAddOnServices,
+  totalDurationMinutes,
+  totalPriceCents,
+} from "@/lib/domain/appointmentServices";
+import { findRedeemablePackage } from "@/lib/domain/packages";
+import {
   getSettings,
   isBeyondBookingWindow,
   BEYOND_WINDOW_MESSAGE,
@@ -85,6 +92,10 @@ export async function POST(req: Request) {
   if (!service || !service.active || service.salonId !== salon.id) {
     return NextResponse.json({ error: "Service not found." }, { status: 404 });
   }
+  const addOns = await resolveAddOnServices(salon.id, service.id, data.addOnServiceIds);
+  if (!addOns) {
+    return NextResponse.json({ error: "Invalid service selection." }, { status: 400 });
+  }
 
   const startsAt = new Date(data.startISO);
   if (Number.isNaN(startsAt.getTime()) || startsAt <= new Date()) {
@@ -101,7 +112,7 @@ export async function POST(req: Request) {
     );
   }
   const endsAt = new Date(
-    startsAt.getTime() + service.durationMinutes * 60_000
+    startsAt.getTime() + totalDurationMinutes(service, addOns) * 60_000
   );
 
   // Race-safe overlap check scoped to this salon. Counts unexpired payment
@@ -146,19 +157,29 @@ export async function POST(req: Request) {
     },
   });
 
+  // A prepaid package session covers the booking outright — no Stripe charge,
+  // and no partial-package/partial-card split, so this only applies when the
+  // booking is exactly the package's service with no add-ons
+  // (docs/FEATURE_OPPORTUNITIES_SPEC.md #7).
+  const redeemable =
+    addOns.length === 0
+      ? await findRedeemablePackage(salon.id, client.id, service.id)
+      : null;
+
   // Only attempt a charge when the platform-wide kill-switch is on — a
   // stale per-salon `paymentsEnabled` value must never take effect while
   // Stripe is off platform-wide.
-  const paymentCtx = isStripePaymentsEnabled()
-    ? await getBookingPaymentContext(salon.id)
-    : null;
+  const paymentCtx =
+    !redeemable && isStripePaymentsEnabled()
+      ? await getBookingPaymentContext(salon.id)
+      : null;
   const charge =
-    paymentCtx?.stripeAccountId && paymentCtx.stripeChargesEnabled
-      ? amountForBooking(paymentCtx, service)
+    !redeemable && paymentCtx?.stripeAccountId && paymentCtx.stripeChargesEnabled
+      ? amountForBooking(paymentCtx, { priceCents: totalPriceCents(service, addOns) })
       : null;
 
-  const appointment = await prisma.appointment.create({
-    data: {
+  const appointment = await createAppointmentWithAddOns(
+    {
       salonId: salon.id,
       serviceId: service.id,
       clientId: client.id,
@@ -166,6 +187,7 @@ export async function POST(req: Request) {
       endsAt,
       managementToken: nanoid(24),
       notes: data.notes,
+      ...(redeemable ? { clientPackageId: redeemable.id } : {}),
       ...(charge
         ? {
             status: "PENDING_PAYMENT",
@@ -173,7 +195,9 @@ export async function POST(req: Request) {
           }
         : {}),
     },
-  });
+    addOns,
+    redeemable?.id
+  );
 
   const whenLabel = formatBiz(startsAt, "EEEE, MMM d 'at' h:mm a", salon.timezone);
 
