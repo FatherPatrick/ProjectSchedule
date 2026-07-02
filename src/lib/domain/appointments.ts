@@ -4,6 +4,7 @@ import { sendNotifications } from "../integrations/notifications";
 import { reportError } from "../observability/reportError";
 import { CANCELLATION_WINDOW_HOURS } from "../config";
 import { refundPayment } from "./payments";
+import { notifyWaitlistOfOpening } from "./waitlist";
 
 /**
  * Result type for appointment state-change operations. Lets callers translate
@@ -182,6 +183,15 @@ export async function cancelAppointment(
     where: { id },
     data: { status: "CANCELLED" },
   });
+
+  // Only a CONFIRMED cancellation actually frees up a slot — PENDING
+  // requests were never part of the busy-set (see the booking routes'
+  // conflict checks), so cancelling one has nothing to offer the waitlist.
+  if (wasConfirmed) {
+    notifyWaitlistOfOpening(salonId, appt.serviceId, appt.startsAt, appt.endsAt).catch((err) =>
+      reportError(err, { where: "appointments.cancel.waitlist", appointmentId: id })
+    );
+  }
 
   // Refund policy (§5.3, §4.3):
   //  - Never-confirmed (PENDING) appointments always refund — the salon

@@ -165,6 +165,28 @@ export type AppointmentStatusResponse = {
 };
 
 // ---------------------------------------------------------------------------
+// Waitlist (POST /api/waitlist, POST /api/waitlist/[token]/claim)
+// ---------------------------------------------------------------------------
+
+export type WaitlistJoinInput = {
+  serviceId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  smsOptIn?: boolean;
+  captchaToken?: string | null;
+};
+
+export type WaitlistJoinResponse = { ok: true };
+
+export type WaitlistClaimResponse = {
+  appointmentId: string;
+  managementToken: string;
+  serviceName: string;
+  whenLabel: string;
+};
+
+// ---------------------------------------------------------------------------
 // Blackouts
 // ---------------------------------------------------------------------------
 

@@ -15,32 +15,41 @@ const prismaMock = vi.hoisted(() => ({
 const sendNotificationsMock = vi.hoisted(() => vi.fn(async () => undefined));
 const reportErrorMock = vi.hoisted(() => vi.fn());
 const refundPaymentMock = vi.hoisted(() => vi.fn());
+const notifyWaitlistOfOpeningMock = vi.hoisted(() => vi.fn(async () => false));
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/integrations/notifications", () => ({ sendNotifications: sendNotificationsMock }));
 vi.mock("@/lib/observability/reportError", () => ({ reportError: reportErrorMock }));
 vi.mock("@/lib/domain/payments", () => ({ refundPayment: refundPaymentMock }));
+vi.mock("@/lib/domain/waitlist", () => ({ notifyWaitlistOfOpening: notifyWaitlistOfOpeningMock }));
 
 import { cancelAppointment } from "@/lib/domain/appointments";
 
 const SALON_ID = "salon_1";
 const APPT_ID = "appt_1";
+const SERVICE_ID = "svc_1";
 
 function confirmedAppt(overrides: Partial<{ startsAt: Date }> = {}) {
+  const startsAt = overrides.startsAt ?? new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h out — within window
   return {
     id: APPT_ID,
     salonId: SALON_ID,
+    serviceId: SERVICE_ID,
     status: "CONFIRMED" as const,
-    startsAt: overrides.startsAt ?? new Date(Date.now() + 48 * 60 * 60 * 1000), // 48h out — within window
+    startsAt,
+    endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
   };
 }
 
 function pendingAppt() {
+  const startsAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
   return {
     id: APPT_ID,
     salonId: SALON_ID,
+    serviceId: SERVICE_ID,
     status: "PENDING" as const,
-    startsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+    startsAt,
+    endsAt: new Date(startsAt.getTime() + 60 * 60 * 1000),
   };
 }
 
@@ -53,6 +62,7 @@ beforeEach(() => {
   sendNotificationsMock.mockClear();
   reportErrorMock.mockClear();
   refundPaymentMock.mockReset().mockResolvedValue({ ok: true });
+  notifyWaitlistOfOpeningMock.mockReset().mockResolvedValue(false);
 });
 
 describe("cancelAppointment — refund policy", () => {
@@ -127,5 +137,31 @@ describe("cancelAppointment — refund policy", () => {
     expect(result.ok).toBe(false);
     expect(prismaMock.appointment.update).not.toHaveBeenCalled();
     expect(refundPaymentMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelAppointment — waitlist notification", () => {
+  it("offers the freed slot to the waitlist when a CONFIRMED appointment is cancelled", async () => {
+    const appt = confirmedAppt();
+    prismaMock.appointment.findUnique.mockResolvedValueOnce(appt);
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+
+    await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: false });
+
+    expect(notifyWaitlistOfOpeningMock).toHaveBeenCalledWith(
+      SALON_ID,
+      SERVICE_ID,
+      appt.startsAt,
+      appt.endsAt
+    );
+  });
+
+  it("does not touch the waitlist when a never-confirmed PENDING request is cancelled", async () => {
+    prismaMock.appointment.findUnique.mockResolvedValueOnce(pendingAppt());
+    prismaMock.payment.findFirst.mockResolvedValueOnce(null);
+
+    await cancelAppointment(SALON_ID, APPT_ID, { byAdmin: true });
+
+    expect(notifyWaitlistOfOpeningMock).not.toHaveBeenCalled();
   });
 });

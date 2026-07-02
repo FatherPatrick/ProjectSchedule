@@ -44,12 +44,12 @@ until the flag is turned on, so these are cheap to revisit before a real launch.
 - [x] **Mobile revenue view** (§9): **deferred**. The Expo admin app has no
   billing screen yet; `/admin/billing` is web-only for now.
 
-**Known follow-up, not yet built:** the admin cancel dialog's "also refund"
-checkbox (`CancelApptButton.tsx`) is unconditional — it doesn't yet check
-whether the appointment actually has a refundable payment before showing
-itself. Harmless (the refund is silently a no-op when there's nothing to
-refund) but slightly confusing UX; worth a follow-up pass once payments are
-live enough to notice in practice.
+**Follow-up fixed (2026-07-01):** the admin cancel dialog's "also refund"
+checkbox (`CancelApptButton.tsx`) used to show unconditionally. It's now
+passed `hasRefundablePayment` from `/admin/calendar`'s appointment query
+(`payments.some(p => p.status === "SUCCEEDED" || p.status === "PARTIALLY_REFUNDED")`,
+mirroring the refundable check in `cancelAppointment`) and only renders when
+there's actually something to refund.
 
 ## Dependency
 

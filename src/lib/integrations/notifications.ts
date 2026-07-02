@@ -9,6 +9,7 @@ import type {
   Client,
   Service,
   Salon,
+  Waitlist,
   NotificationKind,
 } from "@prisma/client";
 
@@ -17,6 +18,7 @@ type SalonFields = Pick<
   "name" | "instagram" | "slug" | "timezone" | "brandColor" | "logoUrl"
 >;
 type Bundle = Appointment & { client: Client; service: Service; salon: SalonFields };
+type WaitlistBundle = Waitlist & { client: Client; service: Service; salon: SalonFields };
 
 const PLATFORM_DEFAULT_BRAND = "#db2777";
 
@@ -67,6 +69,10 @@ function googleCalendarUrl(b: Bundle, manageLink: string): string {
 
 function icalDownloadUrl(slug: string, token: string): string {
   return `${salonAppUrl(slug)}/api/appointments/${token}/ical`;
+}
+
+function waitlistClaimUrl(slug: string, token: string) {
+  return `${salonAppUrl(slug)}/waitlist/${token}`;
 }
 
 function fmtWhen(d: Date, timezone: string) {
@@ -218,6 +224,38 @@ function cancellationCopy(b: Bundle, note?: string) {
   };
 }
 
+function waitlistOfferCopy(entry: WaitlistBundle) {
+  // Only ever called once offeredStartsAt is set (sendWaitlistOffer guards this).
+  const when = fmtWhen(entry.offeredStartsAt!, entry.salon.timezone);
+  const claimUrl = waitlistClaimUrl(entry.salon.slug, entry.claimToken);
+  const text = [
+    `Hi ${entry.client.name}!`,
+    `A spot just opened up for ${entry.service.name} at ${entry.salon.name}: ${when}.`,
+    `This is first-come, first-served — claim it here before it's gone:`,
+    claimUrl,
+    `If you don't want it, no action is needed — you'll stay on the waitlist for the next opening.`,
+  ].join("\n\n");
+
+  const html =
+    logoBlockHtml(entry.salon) +
+    `<p>Hi ${escapeHtml(entry.client.name)}!</p>` +
+    `<p>A spot just opened up for <strong>${escapeHtml(entry.service.name)}</strong> at ${escapeHtml(entry.salon.name)}: ${escapeHtml(when)}.</p>` +
+    `<p>This is first-come, first-served — claim it before it's gone:</p>` +
+    `<p><a href="${claimUrl}" style="${brandButtonStyle(entry.salon)}">Claim this spot</a></p>` +
+    `<p>If you don't want it, no action is needed — you'll stay on the waitlist for the next opening.</p>`;
+
+  const sms =
+    `${entry.salon.name}: A spot opened up for ${entry.service.name} on ${when}! ` +
+    `Claim it (first come, first served): ${claimUrl}`;
+
+  return {
+    subject: `A spot opened up: ${entry.service.name} at ${entry.salon.name}`,
+    text,
+    html,
+    sms,
+  };
+}
+
 const SALON_SELECT = {
   name: true,
   instagram: true,
@@ -285,6 +323,34 @@ export async function sendReviewRequest(
         },
       });
     }
+  }
+}
+
+/**
+ * Notify a client that a waitlist entry of theirs has been offered a freed
+ * slot. There's no `Appointment` yet at this point (the client hasn't
+ * claimed it), so unlike the other notifications here this isn't logged via
+ * `NotificationLog` — it's best-effort, matching `notifyAdminsOfBooking`.
+ */
+export async function sendWaitlistOffer(waitlistId: string) {
+  const entry = await prisma.waitlist.findUnique({
+    where: { id: waitlistId },
+    include: { client: true, service: true, salon: { select: SALON_SELECT } },
+  });
+  if (!entry || !entry.offeredStartsAt) return;
+
+  const copy = waitlistOfferCopy(entry);
+
+  if (entry.client.emailOptIn && entry.client.email) {
+    await sendEmail({
+      to: entry.client.email,
+      subject: copy.subject,
+      html: copy.html,
+      text: copy.text,
+    }).catch(() => {});
+  }
+  if (entry.client.smsOptIn && entry.client.phone) {
+    await sendSMS({ to: entry.client.phone, body: withSmsFooter(copy.sms) }).catch(() => {});
   }
 }
 

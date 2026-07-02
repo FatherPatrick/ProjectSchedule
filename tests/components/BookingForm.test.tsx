@@ -71,7 +71,7 @@ describe("BookingForm submit gating", () => {
     stubFetchSlots([{ startISO: "2099-07-01T15:00:00.000Z", label: "3:00 PM" }]);
 
     render(
-      <BookingForm services={SERVICES} closedDayOfWeek={[]} maxAdvanceDays={null} />
+      <BookingForm services={SERVICES} closedDayOfWeek={[]} maxAdvanceDays={null} waitlistEnabled={false} />
     );
 
     await user.click(screen.getByText("pick-day"));
@@ -97,7 +97,7 @@ describe("BookingForm submit gating", () => {
     stubFetchSlots([]); // no openings -> only the propose path is offered
 
     render(
-      <BookingForm services={SERVICES} closedDayOfWeek={[]} maxAdvanceDays={null} />
+      <BookingForm services={SERVICES} closedDayOfWeek={[]} maxAdvanceDays={null} waitlistEnabled={false} />
     );
 
     await user.click(screen.getByText("pick-day"));

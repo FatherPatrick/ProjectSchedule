@@ -27,6 +27,14 @@
   a real Stripe test-mode QA pass, which hasn't happened yet) before ever
   setting `STRIPE_PAYMENTS_ENABLED=true`. Its "Open decisions — resolved"
   section has the defaults that were locked in along the way.
+- **Waitlist cron:** `/api/cron/expire-waitlist` is declared in
+  `vercel.json` alongside the existing crons — confirm it's actually
+  scheduled once deployed (same Vercel Cron paid-plan caveat as
+  `expire-holds`: anything more frequent than daily needs a paid plan, which
+  is why waitlist escalation to the next person in line is a daily sweep,
+  not instant). Harmless if it never runs — `WAITING`/`NOTIFIED` entries just
+  don't get cleaned up or escalated — but worth confirming before relying on
+  the waitlist for real.
 
 ## Tech debt
 
@@ -44,7 +52,4 @@
 ### Spec rollout order
 
 1. **Stripe payments** — admin-toggleable client payments + billing/revenue dashboard (Stripe Connect). Inherits theming for the onboarding + billing UI. *All 7 phases implemented (schema, Connect onboarding, admin config, booking + payment, refunds + sweeper, billing dashboard); still fully inert behind `STRIPE_PAYMENTS_ENABLED`, and real Stripe test-mode QA hasn't happened yet.* See [docs/STRIPE_SPEC.md](docs/STRIPE_SPEC.md)
-2. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. Tier 1 items (iCal links, visit history, rebook, review requests, waitlist) are mostly independent; Packages depends on Stripe. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)
-
-Variations:
-- Tier 1 feature-roadmap items with no new schema (review requests, iCal links) can be cherry-picked ahead of Stripe if useful sooner. Avoid anything with new schema (Waitlist, Loyalty, Packages) until after Stripe.
+2. **Feature roadmap** — ongoing backlog pulled in alongside/after the above. *Tier 1 is fully done* (iCal, visit history, rebook, review-request, and waitlist — the last shipped 2026-07-02, simple FCFS, behind `Setting.waitlistEnabled`). Tier 2 is next (Packages depends on Stripe, now unblocked) — loyalty-program scope and package-payment-timing are still open decisions to ask about before starting. See [docs/FEATURE_OPPORTUNITIES_SPEC.md](docs/FEATURE_OPPORTUNITIES_SPEC.md)

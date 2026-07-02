@@ -23,6 +23,9 @@ interface TimeSlotPickerProps {
   maxProposeDate: string;
   showLeadWarning: boolean;
   showWindowWarning: boolean;
+  /** Whether the salon has the waitlist turned on — hides the CTA otherwise. */
+  waitlistEnabled: boolean;
+  onJoinWaitlist: () => void;
 }
 
 export function TimeSlotPicker({
@@ -43,6 +46,8 @@ export function TimeSlotPicker({
   maxProposeDate,
   showLeadWarning,
   showWindowWarning,
+  waitlistEnabled,
+  onJoinWaitlist,
 }: TimeSlotPickerProps) {
   return (
     <Card as="fieldset" className="space-y-3">
@@ -50,10 +55,21 @@ export function TimeSlotPicker({
       {slotsLoading ? (
         <p className="text-sm text-neutral-500">Loading times…</p>
       ) : displaySlots.length === 0 ? (
-        <p className="text-sm text-neutral-500">
-          No openings on that day. Try another date or propose a custom time
-          below.
-        </p>
+        <div className="space-y-2">
+          <p className="text-sm text-neutral-500">
+            No openings on that day. Try another date or propose a custom time
+            below.
+          </p>
+          {waitlistEnabled && (
+            <button
+              type="button"
+              onClick={onJoinWaitlist}
+              className="text-sm rounded-full border border-brand-soft text-brand px-3 py-1.5 hover:bg-brand-soft"
+            >
+              Notify me when a spot opens up
+            </button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {displaySlots.map((slot) => (

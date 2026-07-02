@@ -8,12 +8,15 @@ export function CancelApptButton({
   id,
   label = "Cancel",
   appointmentLabel,
+  hasRefundablePayment = false,
 }: {
   id: string;
   label?: string;
   /** Optional human-readable appointment description (e.g. "Jane Doe at 3:00 PM")
    *  used to disambiguate this button for screen readers. */
   appointmentLabel?: string;
+  /** Whether this appointment has a payment that a refund would actually apply to. */
+  hasRefundablePayment?: boolean;
 }) {
   const { pending, error: err, run, clearError } = useAdminAction();
   const [showForm, setShowForm] = useState(false);
@@ -67,7 +70,7 @@ export function CancelApptButton({
             {message.trim().length}/280
           </span>
         </label>
-        {!isDecline && (
+        {!isDecline && hasRefundablePayment && (
           <label className="flex w-full items-center gap-1.5 text-xs text-red-900">
             <input
               type="checkbox"

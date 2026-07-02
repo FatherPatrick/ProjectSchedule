@@ -64,12 +64,12 @@ This table shows what's built, what's missing, and which competitors have it.
 | Business hours overrides | ✅ | ✅ | ✅ | ✅ | ✅ | — |
 | Mobile admin app | ✅ | ✅ | ✅ | ✅ | Partial | — |
 | Push notifications (admin) | ✅ | ❌ | ✅ | ❌ | ❌ | Differentiator |
-| Payments / deposits | 🔜 Planned | ✅ | ✅ | ✅ | ✅ | In Stripe spec |
-| **Waitlist management** | ❌ | ✅ | ✅ | ❌ | ✅ | **Tier 1 gap** |
-| **Google Calendar / iCal export** | ❌ | ❌ | ✅ | ✅ | ✅ | **Tier 1 gap** |
-| **Client visit history (admin)** | Partial* | ✅ | ✅ | ✅ | ✅ | **Tier 1 gap** |
-| **Rebooking from confirmation** | ❌ | ❌ | ✅ (1-tap) | ✅ | ✅ | **Tier 1 gap** |
-| **Review request (post-appt)** | ❌ | ❌ | ✅ | ❌ | ✅ | **Tier 1 gap** |
+| Payments / deposits | ✅ (flagged off) | ✅ | ✅ | ✅ | ✅ | Shipped in STRIPE_SPEC.md, inert behind `STRIPE_PAYMENTS_ENABLED` |
+| **Waitlist management** | ✅ | ✅ | ✅ | ❌ | ✅ | Shipped 2026-07-02 — simple FCFS (see #5 below) |
+| **Google Calendar / iCal export** | ✅ | ❌ | ✅ | ✅ | ✅ | Shipped — `.ics` download + Google Calendar link in confirmation/reminder emails |
+| **Client visit history (admin)** | ✅ | ✅ | ✅ | ✅ | ✅ | Shipped — `/admin/clients` list + `/admin/clients/[id]` detail |
+| **Rebooking from confirmation** | ✅ | ❌ | ✅ (1-tap) | ✅ | ✅ | Shipped — `?serviceId=` deep link in confirmation/reminder emails |
+| **Review request (post-appt)** | ✅ | ❌ | ✅ | ❌ | ✅ | Shipped — fires on admin "mark complete", URL configurable in `/admin/hours` |
 | **Multi-service booking** | ❌ | ✅ | Partial | ✅ | ✅ | **Tier 2 gap** |
 | **Loyalty / stamp card** | ❌ | ❌ | ✅ | ❌ | ✅ | **Tier 2 gap** |
 | **Packages / bundles** | ❌ | ✅ | ✅ | ✅ | ✅ | **Tier 2 gap** |
@@ -82,15 +82,13 @@ This table shows what's built, what's missing, and which competitors have it.
 | **Multi-staff management** | ❌ | ✅ | ✅ | ✅ | ✅ | **Tier 3** (SaaS phase) |
 | **No-show prediction (AI)** | ❌ | ❌ | ❌ | ❌ | ❌ | **Emerging — first-mover** |
 
-_*Client history: the `Appointment` and `Client` tables contain full history, but there is no admin UI to browse a specific client's past bookings._
-
 ---
 
 ## ⚠️ Open Decisions — Confirm Before Implementing
 
+- [x] **Waitlist architecture** — **resolved 2026-07-01: simple first-come-first-served notify.** On cancellation, notify the single oldest `WAITING` entry for the cancelled slot's service; if unclaimed within `waitlistClaimWindowMinutes`, move to the next entry. No rule-based priority queue for v1. (§ Waitlist)
+- [x] **Client accounts** — **resolved 2026-07-01: keep the current anonymous-booking + token-based model.** No Auth.js client login for now; Tier 2 features (loyalty balance, package credits) surface through the existing per-appointment management-token page rather than a persistent account. Client Portal (Tier 2 #10) stays out of scope until this is revisited. (§ Client Portal)
 - [ ] **Nail-salon specificity vs. general service** — should nail-specific workflows (nail length affecting duration, nail art photo selection, add-ons like gel/acrylic) be built, or keep the service abstraction generic for multi-tenant SaaS? (§ Nail-Specific Differentiation)
-- [ ] **Client accounts** — should clients be able to create logins to view history and rebook, or keep the current anonymous-booking + token-based model? Affects scope of Tier 2 features significantly. (§ Client Portal)
-- [ ] **Waitlist architecture** — simple first-come-first-served SMS blast on cancellation, or smart queue with rule-based priority (next on list, client preferences, slot size match)? (§ Waitlist)
 - [ ] **Loyalty program scope** — points-based (earn/redeem cents), stamp card (visit 10 get 1 free), or both? (§ Loyalty)
 - [ ] **Package payment timing** — pay in full at package purchase vs. pay-per-use with a pre-purchased credit balance? (§ Packages)
 
@@ -121,37 +119,69 @@ This is exactly the trajectory the multi-tenant spec establishes. The question i
 
 These fill the most painful gaps without requiring new data models. Most can be built on top of what's already in the schema.
 
-#### 1. Google Calendar / iCal Add-to-Calendar Link
-**What**: Include an `.ics` file attachment (or "Add to Google Calendar" deep link) in every booking confirmation email.  
-**Why it wins**: Reduces no-shows by 15–25% (client has a calendar event with the appointment details). Every competitor either offers this or calendar sync. Zero new schema changes required.  
-**How to build**: In `src/app/api/appointments/route.ts` (booking handler) and the email templates in `src/lib/email/`, generate an `.ics` string with `BEGIN:VCALENDAR` / `VEVENT` blocks using the appointment's `startsAt`, `endsAt`, `service.name`, and business address. Attach as `text/calendar` or include as a data URI link.  
-**Effort**: 1–2 days.
+**Status (2026-07-02): all 5 shipped.** 4 of 5 (iCal, visit history, rebook,
+review request) were already live from the pre-multi-tenant "Calendar
+changes" commit; **Waitlist** (#5) shipped 2026-07-02 as simple FCFS. Tier 1
+is complete — Tier 2 is next, pending the loyalty-scope and package-timing
+decisions still open below.
 
-#### 2. Client Visit History in Admin
-**What**: Admin can click a client's name on the calendar and see their full booking history, notes, and cancellations.  
-**Why it wins**: The data already exists in the `Appointment` table joined to `Client`. Right now there is no way to view a client's history without querying the DB directly. Enables personalization ("last time you got gel, want to add that again?").  
-**How to build**: Add a `/admin/clients/[id]` route that queries `appointment.findMany({ where: { clientId } })` with service and status data. Link client names in the calendar view to this page.  
-**Effort**: 2–3 days.
+#### 1. Google Calendar / iCal Add-to-Calendar Link — ✅ Shipped
+Implemented: `src/app/api/appointments/[token]/ical/route.ts` (`.ics` download) plus a
+"Add to Google Calendar" deep link, both included in confirmation/reminder emails
+via `src/lib/integrations/notifications.ts`.
 
-#### 3. "Rebook" Link in Confirmation / Reminder Emails
-**What**: A deep-link in confirmation and reminder emails that pre-selects the same service and technician, dropping the client straight into the date picker.  
-**Why it wins**: Booksy's "one-tap rebooking" is one of their most-cited retention features. Converts satisfied clients into repeat bookings with zero friction. Pre-populating `serviceId` in the booking URL is a query param change.  
-**How to build**: Add `?serviceId=<id>` query param handling in the public booking form (service selection step) to pre-select a service. Pass this in the email template alongside the cancellation token.  
-**Effort**: 1 day.
+#### 2. Client Visit History in Admin — ✅ Shipped
+Implemented: `/admin/clients` (list) and `/admin/clients/[id]` (per-client
+appointment history with status badges).
 
-#### 4. Post-Completion Review Request
-**What**: When an appointment status is set to `COMPLETED`, fire an email/SMS asking the client to leave a Google review (or Yelp).  
-**Why it wins**: SimplyBook.me automated Google review requests are a differentiating feature. New client acquisition via organic reviews costs nothing.  
-**How to build**: In the admin's "mark complete" action (`/api/admin/appointments/[id]`), trigger a new notification kind `REVIEW_REQUEST` via the existing `NotificationLog` + Resend/Twilio pipeline. Add the Google Maps review link as a configurable `Setting` in the admin dashboard.  
-**Effort**: 1–2 days.
+#### 3. "Rebook" Link in Confirmation / Reminder Emails — ✅ Shipped
+Implemented: `?serviceId=` query param pre-selects a service in
+`src/app/book/BookingForm.tsx`; the link is generated in
+`src/lib/integrations/notifications.ts` (`rebookUrl`) and included in both
+confirmation and reminder messages.
 
-#### 5. Waitlist Management
+#### 4. Post-Completion Review Request — ✅ Shipped
+Implemented: `Setting.reviewRequestEnabled` / `reviewRequestUrl` (configurable
+in `/admin/hours`), fired from `/api/admin/appointments/[id]/complete` via
+`sendReviewRequest`.
+
+#### 5. Waitlist Management — ✅ Shipped (2026-07-02)
+Implemented per the "simple FCFS" decision locked below: `Waitlist` model +
+`WaitlistStatus` (`src/lib/domain/waitlist.ts`), `Setting.waitlistEnabled` /
+`waitlistClaimWindowMinutes` (toggle in `/admin/hours`), a "Notify me when a
+spot opens up" CTA on the booking form when a day has no openings
+(`src/app/book/TimeSlotPicker.tsx`), a public claim page
+(`src/app/waitlist/[token]/page.tsx`), and `/admin/waitlist` for visibility +
+manual removal. `cancelAppointment` offers the freed slot to the oldest
+`WAITING` entry for that service on every CONFIRMED cancellation
+(`src/lib/domain/appointments.ts`).
+
+**Deviation from the original sketch below, worth knowing:** the freed slot
+is **not held exclusively** for the notified client — it's normally bookable
+the moment the cancellation lands, so the waitlisted client and any other
+site visitor race for it. The claim endpoint re-checks availability with the
+same conflict query the booking routes use before committing, and requeues
+(not expires) the client if they lose the race. Building an actual exclusive
+hold would mean extending the `PENDING_PAYMENT`-style hold mechanism to a
+second, unpaid case — more machinery than "simple FCFS" called for.
+
+**Also a platform-imposed deviation from "notify next after 30 min":**
+escalating to the next waiting entry when nobody claims in time is a **daily
+cron sweep** (`/api/cron/expire-waitlist`), not a tight 30-minute loop — Vercel
+Cron needs a paid plan for anything more frequent than daily (same constraint
+already noted for the Stripe hold-expiry sweeper). The claim window itself
+(`waitlistClaimWindowMinutes`) is still enforced exactly at claim time; only
+the "offer it to the next person" step is coarse, up to ~24h.
 **What**: When a client tries to book a full slot or cancels an appointment, they can join a waitlist. When a cancellation opens a slot, notify the next waitlisted client by SMS/email to claim it.  
 **Why it wins**: Research shows 15–20% reduction in revenue-losing schedule gaps. Both Fresha and Booksy offer this; it's table-stakes for serious salon software.  
-**Schema changes**:
+**Schema changes** (updated for the multi-tenant model landed since this doc was
+written — every tenant-owned table carries its own indexed `salonId` rather than
+relying on a join through `service`/`client`, matching the rest of the schema):
 ```prisma
 model Waitlist {
   id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   serviceId   String
   service     Service  @relation(fields: [serviceId], references: [id])
   clientId    String
@@ -161,6 +191,8 @@ model Waitlist {
   claimedAt   DateTime?
   expiresAt   DateTime  // auto-expire stale entries after ~7 days
   status      WaitlistStatus @default(WAITING)
+
+  @@index([salonId, serviceId, status])
 }
 
 enum WaitlistStatus { WAITING NOTIFIED CLAIMED EXPIRED }
@@ -184,26 +216,35 @@ The join table approach is cleaner for reporting.
 #### 7. Packages / Prepaid Bundles
 **What**: Client purchases a bundle (e.g., "5 gel manicures for $200, save $25"). Each booking deducts from their balance. Admin can see a client's remaining package credits.  
 **Why it wins**: Acuity's package system is their #1 retention differentiator for service businesses. Upfront revenue, guaranteed future visits.  
-**Schema changes**:
+**Schema changes** (`salonId` added per the multi-tenant convention — see the
+Waitlist note above):
 ```prisma
 model Package {
   id            String   @id @default(cuid())
+  salonId       String
+  salon         Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   name          String
   serviceId     String
   service       Service  @relation(...)
   totalSessions Int
   priceCents    Int
   active        Boolean  @default(true)
+
+  @@index([salonId])
 }
 
 model ClientPackage {
   id            String   @id @default(cuid())
+  salonId       String
+  salon         Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   clientId      String
   packageId     String
   purchasedAt   DateTime @default(now())
   sessionsUsed  Int      @default(0)
   sessionsTotal Int
   paidCents     Int
+
+  @@index([salonId, clientId])
 }
 ```
 **Dependencies**: Requires Stripe for purchase. Links to `STRIPE_SPEC.md`.  
@@ -212,21 +253,30 @@ model ClientPackage {
 #### 8. Loyalty / Stamp Card
 **What**: Client earns 1 stamp per completed appointment. After N stamps (configurable by admin), they earn a reward (free service, discount).  
 **Why it wins**: Booksy's stamp card is their most-cited retention feature in reviews. SimplyBook.me has it. Drives repeat visits.  
-**Schema changes**:
+**Schema changes** (`salonId` added per the multi-tenant convention — see the
+Waitlist note above):
 ```prisma
 model LoyaltyStamp {
   id            String   @id @default(cuid())
+  salonId       String
+  salon         Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   clientId      String
   appointmentId String   @unique
   earnedAt      DateTime @default(now())
+
+  @@index([salonId, clientId])
 }
 
 model LoyaltyReward {
   id          String   @id @default(cuid())
+  salonId     String
+  salon       Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
   clientId    String
   redeemedAt  DateTime?
   expiresAt   DateTime
   description String   // "Free gel manicure"
+
+  @@index([salonId, clientId])
 }
 ```
 Add to `Setting`: `loyaltyStampsRequired` (int, default 10), `loyaltyRewardDescription` (string).  
@@ -281,14 +331,14 @@ Covered in Tier 1 — bumped up because of its outsized impact on organic growth
 ## Implementation Order (Recommended)
 
 ```
-Phase A — Quick wins (before or alongside Stripe)
+Phase A — Quick wins (before or alongside Stripe) — ✅ done (2026-07-01)
   1. Google Calendar / iCal link in confirmation email
   2. Rebook link in confirmation / reminder emails
   3. Client visit history page in admin
   4. Review request on COMPLETED status
 
-Phase B — After Stripe goes live
-  5. Waitlist management (adds Waitlist schema)
+Phase B — Stripe is now live behind its flag; unblocked
+  5. Waitlist management (adds Waitlist schema) — ✅ done (2026-07-02)
   6. Loyalty / stamp card (adds LoyaltyStamp schema)
   7. Service photo gallery (adds storage)
 

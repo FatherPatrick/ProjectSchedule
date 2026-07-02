@@ -45,6 +45,13 @@ const MAX_ADVANCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "none", label: "No limit" },
 ];
 
+const WAITLIST_WINDOW_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "15", label: "15 minutes" },
+  { value: "30", label: "30 minutes" },
+  { value: "60", label: "1 hour" },
+  { value: "120", label: "2 hours" },
+];
+
 async function saveHours(formData: FormData) {
   "use server";
   await adminAction("/admin/hours", "hours", async () => {
@@ -135,6 +142,23 @@ async function saveNotificationSettings(formData: FormData) {
       throw new Error("Review link must be a valid URL starting with http:// or https://");
     }
     await updateSettings(salonId, { reviewRequestEnabled: enabled, reviewRequestUrl: url });
+  });
+}
+
+async function saveWaitlistSettings(formData: FormData) {
+  "use server";
+  await adminAction("/admin/hours", "waitlist", async () => {
+    const salonId = await getAdminSalonId();
+    const enabled = formData.get("waitlistEnabled") === "on";
+    const windowRaw = formData.get("waitlistClaimWindowMinutes");
+    const allowed = new Set(WAITLIST_WINDOW_OPTIONS.map((o) => o.value));
+    if (typeof windowRaw !== "string" || !allowed.has(windowRaw)) {
+      throw new Error("Choose a valid claim window.");
+    }
+    await updateSettings(salonId, {
+      waitlistEnabled: enabled,
+      waitlistClaimWindowMinutes: Number(windowRaw),
+    });
   });
 }
 
@@ -292,6 +316,58 @@ export default async function HoursAdmin({
         </div>
 
         <Button type="submit">Save notification settings</Button>
+      </Card>
+
+      <Card
+        as="form"
+        key={`waitlist-${settings.waitlistEnabled}-${settings.waitlistClaimWindowMinutes}`}
+        action={saveWaitlistSettings}
+        className="space-y-4"
+      >
+        <UnsavedChangesGuard />
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Waitlist</h2>
+          <p className="text-sm text-neutral-600">
+            Let clients join a waitlist for a fully-booked service. When a
+            confirmed appointment is cancelled, the longest-waiting client is
+            emailed/texted a link to claim the freed slot — first come, first
+            served (see{" "}
+            <a href="/admin/waitlist" className="underline">
+              Waitlist
+            </a>{" "}
+            for who&apos;s waiting).
+          </p>
+        </div>
+
+        <label className="flex items-center gap-3 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            name="waitlistEnabled"
+            defaultChecked={settings.waitlistEnabled}
+            className="rounded border-neutral-300"
+          />
+          <span>Allow clients to join the waitlist</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Claim window
+          </label>
+          <p className="text-xs text-neutral-500 mb-1.5">
+            How long a notified client has to claim the spot before it&apos;s
+            offered to the next person in line.
+          </p>
+          <PrettySelect
+            key={settings.waitlistClaimWindowMinutes}
+            name="waitlistClaimWindowMinutes"
+            ariaLabel="Waitlist claim window"
+            defaultValue={String(settings.waitlistClaimWindowMinutes)}
+            triggerClassName="min-w-[14rem]"
+            options={WAITLIST_WINDOW_OPTIONS}
+          />
+        </div>
+
+        <Button type="submit">Save waitlist settings</Button>
       </Card>
 
       <Card as="section" className="space-y-4">

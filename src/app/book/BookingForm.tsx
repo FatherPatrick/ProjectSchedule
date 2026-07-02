@@ -35,12 +35,15 @@ export function BookingForm({
   services,
   closedDayOfWeek,
   maxAdvanceDays,
+  waitlistEnabled,
   initialServiceId,
 }: {
   services: ServiceLite[];
   closedDayOfWeek: number[];
   /** How far ahead booking is allowed, in days. `null` means no limit. */
   maxAdvanceDays: number | null;
+  /** Whether the salon has the waitlist turned on. */
+  waitlistEnabled: boolean;
   /** Pre-select a service (e.g. from a rebook link). Falls back to first service. */
   initialServiceId?: string;
 }) {
@@ -53,6 +56,7 @@ export function BookingForm({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [startISO, setStartISO] = useState<string | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
+  const [waitlistMode, setWaitlistMode] = useState(false);
   const [customDate, setCustomDate] = useState<string>("");
   const [customTime, setCustomTime] = useState<string>("");
   const [customNotes, setCustomNotes] = useState<string>("");
@@ -69,6 +73,7 @@ export function BookingForm({
     when: string;
     serviceName: string;
     pending: boolean;
+    waitlisted?: boolean;
   } | null>(null);
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
 
@@ -248,7 +253,10 @@ export function BookingForm({
       smsOptIn,
       captchaToken,
     };
-    if (proposeMode) {
+    if (waitlistMode) {
+      endpoint = "/api/waitlist";
+      body = { serviceId, name, phone, smsOptIn, captchaToken };
+    } else if (proposeMode) {
       const iso = customStartISO();
       if (!iso) {
         setError("Please choose a date and time.");
@@ -289,7 +297,9 @@ export function BookingForm({
       if (!res.ok) throw new Error(data.error ?? "Could not book.");
       // Captcha tokens are single-use — reset for any subsequent submit.
       setCaptchaToken(null);
-      if (data.requiresPayment) {
+      if (waitlistMode) {
+        setDone({ when: "", serviceName: service?.name ?? "", pending: false, waitlisted: true });
+      } else if (data.requiresPayment) {
         setPendingPayment({
           clientSecret: data.clientSecret,
           publishableKey: data.publishableKey,
@@ -323,6 +333,7 @@ export function BookingForm({
           setPendingPayment(null);
           setStartISO(null);
           setProposeMode(false);
+          setWaitlistMode(false);
           setCustomDate("");
           setCustomTime("");
           setCustomNotes("");
@@ -355,50 +366,73 @@ export function BookingForm({
         onSelect={setServiceId}
       />
 
-      <DatePicker
-        selected={date}
-        onSelect={(d) => {
-          setDate(d);
-          if (d) {
-            const key = localDateKey(d);
-            setCustomDate((prev) => prev || key);
-          }
-        }}
-        disabled={dpDisabled}
-        modifiers={dpModifiers}
-        modifiersClassNames={dpModifiersClassNames}
-        endMonth={maxDayEnd ?? undefined}
-      />
+      {waitlistMode ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-soft bg-brand-soft p-3 text-sm text-brand">
+          <span>
+            Joining the waitlist for <strong>{service?.name}</strong>.
+          </span>
+          <button
+            type="button"
+            onClick={() => setWaitlistMode(false)}
+            className="shrink-0 text-xs underline underline-offset-2"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <DatePicker
+            selected={date}
+            onSelect={(d) => {
+              setDate(d);
+              if (d) {
+                const key = localDateKey(d);
+                setCustomDate((prev) => prev || key);
+              }
+            }}
+            disabled={dpDisabled}
+            modifiers={dpModifiers}
+            modifiersClassNames={dpModifiersClassNames}
+            endMonth={maxDayEnd ?? undefined}
+          />
 
-      {date && (
-        <TimeSlotPicker
-          slotsLoading={slotsLoading}
-          displaySlots={displaySlots}
-          startISO={startISO}
-          proposeMode={proposeMode}
-          onSelectSlot={(iso) => {
-            setProposeMode(false);
-            setStartISO(iso);
-          }}
-          onEnterPropose={() => {
-            setProposeMode(true);
-            setStartISO(null);
-          }}
-          onExitPropose={() => setProposeMode(false)}
-          customDate={customDate}
-          customTime={customTime}
-          customNotes={customNotes}
-          onCustomDateChange={setCustomDate}
-          onCustomTimeChange={setCustomTime}
-          onCustomNotesChange={setCustomNotes}
-          minProposeDate={minProposeDate}
-          maxProposeDate={maxProposeDate}
-          showLeadWarning={Boolean(customDate && customTime && !customLeadOk())}
-          showWindowWarning={Boolean(customDate && !customWithinWindow())}
-        />
+          {date && (
+            <TimeSlotPicker
+              slotsLoading={slotsLoading}
+              displaySlots={displaySlots}
+              startISO={startISO}
+              proposeMode={proposeMode}
+              onSelectSlot={(iso) => {
+                setProposeMode(false);
+                setStartISO(iso);
+              }}
+              onEnterPropose={() => {
+                setProposeMode(true);
+                setStartISO(null);
+              }}
+              onExitPropose={() => setProposeMode(false)}
+              customDate={customDate}
+              customTime={customTime}
+              customNotes={customNotes}
+              onCustomDateChange={setCustomDate}
+              onCustomTimeChange={setCustomTime}
+              onCustomNotesChange={setCustomNotes}
+              minProposeDate={minProposeDate}
+              maxProposeDate={maxProposeDate}
+              showLeadWarning={Boolean(customDate && customTime && !customLeadOk())}
+              showWindowWarning={Boolean(customDate && !customWithinWindow())}
+              waitlistEnabled={waitlistEnabled}
+              onJoinWaitlist={() => {
+                setProposeMode(false);
+                setStartISO(null);
+                setWaitlistMode(true);
+              }}
+            />
+          )}
+        </>
       )}
 
-      {(startISO || (proposeMode && customLeadOk())) && (
+      {(startISO || (proposeMode && customLeadOk()) || waitlistMode) && (
         <ContactFields
           name={name}
           phone={phone}
@@ -435,20 +469,30 @@ export function BookingForm({
           !agree ||
           !agreePolicies ||
           (captchaRequired && !captchaToken) ||
-          (proposeMode ? !customLeadOk() || !customWithinWindow() : !startISO)
+          (waitlistMode
+            ? false
+            : proposeMode
+              ? !customLeadOk() || !customWithinWindow()
+              : !startISO)
         }
       >
         {submitting
-          ? proposeMode
-            ? "Sending request…"
-            : "Booking…"
-          : proposeMode
+          ? waitlistMode
+            ? "Joining…"
+            : proposeMode
+              ? "Sending request…"
+              : "Booking…"
+          : waitlistMode
             ? service
-              ? `Request ${service.name}`
-              : "Send request"
-            : service
-              ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
-              : "Book"}
+              ? `Join waitlist for ${service.name}`
+              : "Join waitlist"
+            : proposeMode
+              ? service
+                ? `Request ${service.name}`
+                : "Send request"
+              : service
+                ? `Book ${service.name} · ${formatPrice(service.priceCents)}`
+                : "Book"}
       </Button>
     </form>
   );

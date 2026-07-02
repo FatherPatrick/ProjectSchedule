@@ -68,6 +68,7 @@ export default async function BookPage({
         <BookingForm
           closedDayOfWeek={closedDayOfWeek}
           maxAdvanceDays={settings.maxAdvanceDays}
+          waitlistEnabled={settings.waitlistEnabled}
           initialServiceId={initialServiceId}
           services={services.map((s) => ({
             id: s.id,

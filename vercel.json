@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/expire-holds",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/expire-waitlist",
+      "schedule": "0 17 * * *"
     }
   ]
 }

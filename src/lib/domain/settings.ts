@@ -20,6 +20,10 @@ export interface AppSettings {
   reviewRequestEnabled: boolean;
   /** URL clients are directed to when leaving a review (e.g. Google Maps review link). */
   reviewRequestUrl: string | null;
+  /** When true, clients can join a per-service waitlist. */
+  waitlistEnabled: boolean;
+  /** Minutes a notified waitlist entry has to claim a freed slot. */
+  waitlistClaimWindowMinutes: number;
 }
 
 export async function getSettings(salonId: string): Promise<AppSettings> {
@@ -40,6 +44,8 @@ export async function getSettings(salonId: string): Promise<AppSettings> {
     maxAdvanceDays: row.maxAdvanceDays,
     reviewRequestEnabled: row.reviewRequestEnabled,
     reviewRequestUrl: row.reviewRequestUrl,
+    waitlistEnabled: row.waitlistEnabled,
+    waitlistClaimWindowMinutes: row.waitlistClaimWindowMinutes,
   };
 }
 

@@ -13,40 +13,40 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Salon {
-  id              String      @id @default(cuid())
+  id              String  @id @default(cuid())
   /// URL subdomain, e.g. "polished" in polished.app.com. Lowercase, unique.
   /// Immutable after creation — slugs appear in every client-facing link.
-  slug            String      @unique
+  slug            String  @unique
   name            String
-  timezone        String      @default("America/Los_Angeles")
+  timezone        String  @default("America/Los_Angeles")
   instagram       String?
   /// Primary brand color (hex, validated). Drives buttons, links, primary accents.
-  brandColor      String      @default("#db2777") // current pink-600
+  brandColor      String  @default("#db2777") // current pink-600
   /// Secondary accent color (hex, validated). Independently editable.
-  accentColor     String      @default("#db2777") // defaults to brand until customized
+  accentColor     String  @default("#db2777") // defaults to brand until customized
   /// Page/background tint (hex, validated). Was `themeColor` pre-appearance-theming.
-  backgroundColor String      @default("#fdf2f8") // current pink-50-ish tint
+  backgroundColor String  @default("#fdf2f8") // current pink-50-ish tint
   /// Curated font key, e.g. "geist" | "playfair" | "poppins". Maps to a bundled font.
-  fontKey         String      @default("geist")
+  fontKey         String  @default("geist")
   /// Vercel Blob URL of the uploaded logo; null → render the salon name as text.
   logoUrl         String?
 
   // Stripe Connect (docs/STRIPE_SPEC.md, inert until paymentsEnabled + charges pass)
-  stripeAccountId        String?      @unique
-  stripeChargesEnabled   Boolean      @default(false)
-  stripePayoutsEnabled   Boolean      @default(false)
-  stripeDetailsSubmitted Boolean      @default(false)
+  stripeAccountId        String?     @unique
+  stripeChargesEnabled   Boolean     @default(false)
+  stripePayoutsEnabled   Boolean     @default(false)
+  stripeDetailsSubmitted Boolean     @default(false)
   stripeAccountUpdatedAt DateTime?
-  paymentsEnabled        Boolean      @default(false)
-  paymentMode            PaymentMode  @default(NONE)
+  paymentsEnabled        Boolean     @default(false)
+  paymentMode            PaymentMode @default(NONE)
   depositCents           Int?
   depositPercent         Int?
-  depositType            DepositType  @default(FIXED)
-  currency               String       @default("usd")
+  depositType            DepositType @default(FIXED)
+  currency               String      @default("usd")
 
-  status          SalonStatus @default(ACTIVE)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  status    SalonStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   services      Service[]
   clients       Client[]
@@ -58,6 +58,7 @@ model Salon {
   admins        User[]
   adminPhones   AdminPhone[]
   payments      Payment[]
+  waitlist      Waitlist[]
 
   @@index([status])
 }
@@ -141,6 +142,7 @@ model Service {
   updatedAt       DateTime      @updatedAt
   appointments    Appointment[]
   salon           Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  waitlist        Waitlist[]
 
   @@index([salonId])
 }
@@ -160,6 +162,7 @@ model Client {
   appointments Appointment[]
   salon        Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
   user         User?         @relation(fields: [userId], references: [id])
+  waitlist     Waitlist[]
 
   @@index([salonId, email])
   @@index([salonId, phone])
@@ -237,19 +240,25 @@ model BusinessHoursSchedule {
 }
 
 model Setting {
-  id                   String  @id
+  id                         String  @id
   /// One-to-one with Salon. Populated by the backfill script; made non-nullable
   /// and used as the primary lookup key after the Phase 1c migration.
-  salonId              String? @unique
-  slotGranularityMin   Int
-  allowStartAtClose    Boolean @default(false)
+  salonId                    String? @unique
+  slotGranularityMin         Int
+  allowStartAtClose          Boolean @default(false)
   /// How far in advance clients may book, in days. NULL means no limit.
-  maxAdvanceDays       Int?
+  maxAdvanceDays             Int?
   /// When true, marking an appointment COMPLETED fires a review-request email/SMS.
-  reviewRequestEnabled Boolean @default(false)
+  reviewRequestEnabled       Boolean @default(false)
   /// URL clients are directed to when leaving a review (e.g. Google Maps review link).
-  reviewRequestUrl     String?
-  salon                Salon?  @relation(fields: [salonId], references: [id])
+  reviewRequestUrl           String?
+  /// When true, clients can join a per-service waitlist and get notified when a
+  /// CONFIRMED appointment for that service is cancelled (docs/FEATURE_OPPORTUNITIES_SPEC.md #5).
+  waitlistEnabled            Boolean @default(false)
+  /// Minutes a notified waitlist entry has to claim the freed slot before the
+  /// next entry in line is offered it (via the daily expiry sweep).
+  waitlistClaimWindowMinutes Int     @default(30)
+  salon                      Salon?  @relation(fields: [salonId], references: [id])
 }
 
 /// DB-managed admin allow-list. A phone is an admin of a specific salon.
@@ -343,6 +352,38 @@ model ProcessedStripeEvent {
   processedAt DateTime @default(now())
 }
 
+/// A client waiting for a spot to open up in a fully-booked service
+/// (docs/FEATURE_OPPORTUNITIES_SPEC.md #5). Simple FCFS: on cancellation of a
+/// CONFIRMED appointment, the oldest WAITING entry for that service is
+/// notified about the freed slot via `claimToken`. Not an exclusive hold —
+/// the freed slot remains normally bookable, so the notified client and any
+/// other visitor race for it; the claim endpoint re-checks availability.
+model Waitlist {
+  id              String         @id @default(cuid())
+  salonId         String
+  serviceId       String
+  clientId        String
+  status          WaitlistStatus @default(WAITING)
+  claimToken      String         @unique @default(cuid())
+  requestedAt     DateTime       @default(now())
+  notifiedAt      DateTime?
+  claimedAt       DateTime?
+  /// Expiry for the entry's *current* status: the stale-request expiry
+  /// (requestedAt + 7 days) while WAITING, overwritten with the claim window
+  /// (notifiedAt + Setting.waitlistClaimWindowMinutes) once NOTIFIED.
+  expiresAt       DateTime
+  /// The specific freed slot offered when this entry was last notified.
+  offeredStartsAt DateTime?
+  offeredEndsAt   DateTime?
+
+  salon   Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([salonId, serviceId, status])
+  @@index([status, expiresAt])
+}
+
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -365,6 +406,13 @@ enum AppointmentStatus {
   CANCELLED
   COMPLETED
   NO_SHOW
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  CLAIMED
+  EXPIRED
 }
 
 enum PaymentMode {

@@ -23,7 +23,11 @@ export default async function AdminCalendar() {
         status: { in: ["CONFIRMED", "CANCELLED", "PENDING"] },
       },
       orderBy: { startsAt: "asc" },
-      include: { client: true, service: true },
+      include: {
+        client: true,
+        service: true,
+        payments: { select: { status: true } },
+      },
     }),
     prisma.appointment.count({ where: { salonId, status: "CANCELLED" } }),
   ]);
@@ -135,6 +139,9 @@ export default async function AdminCalendar() {
                     <CancelApptButton
                       id={a.id}
                       appointmentLabel={`${a.client.name} at ${formatBiz(a.startsAt, "h:mm a")}`}
+                      hasRefundablePayment={a.payments.some(
+                        (p) => p.status === "SUCCEEDED" || p.status === "PARTIALLY_REFUNDED"
+                      )}
                     />
                   </div>
                 )}
