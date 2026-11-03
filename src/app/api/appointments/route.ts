@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
-import { findClientIdByEmail } from "@/lib/domain/clients";
+import { findClientIdByEmail, upsertClientForSalon } from "@/lib/domain/clients";
+import { createAppointmentForSalon } from "@/lib/domain/appointments";
+import { getSingleActiveSalonId } from "@/lib/domain/salon";
 import { verifyTurnstileToken } from "@/lib/integrations/captcha";
 import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { sendNotifications } from "@/lib/integrations/notifications";
@@ -65,6 +67,7 @@ export async function POST(req: Request) {
     );
   }
   const data = parsed.data;
+  const salonId = await getSingleActiveSalonId();
 
   const service = await prisma.service.findUnique({
     where: { id: data.serviceId },
@@ -110,32 +113,25 @@ export async function POST(req: Request) {
   // Look up or create client. Email is optional; when present we dedupe by it
   // and enable email notifications, otherwise we store "" and go SMS-only.
   const email = data.email?.trim().toLowerCase() ?? "";
-  const existingId = email ? await findClientIdByEmail(email) : null;
-  const client = await prisma.client.upsert({
-    where: { id: existingId ?? "__nope__" },
-    create: {
+  const existingId = email ? await findClientIdByEmail(salonId, email) : null;
+  const client = await upsertClientForSalon({
+    salonId,
+    existingId,
       name: data.name,
       email,
       phone: data.phone,
       smsOptIn: data.smsOptIn,
       emailOptIn: Boolean(email),
-    },
-    update: {
-      name: data.name,
-      phone: data.phone,
-      smsOptIn: data.smsOptIn,
-    },
   });
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      serviceId: service.id,
-      clientId: client.id,
-      startsAt,
-      endsAt,
-      managementToken: nanoid(24),
-      notes: data.notes,
-    },
+  const appointment = await createAppointmentForSalon({
+    salonId,
+    serviceId: service.id,
+    clientId: client.id,
+    startsAt,
+    endsAt,
+    managementToken: nanoid(24),
+    notes: data.notes,
   });
 
   // Fire-and-forget notifications.

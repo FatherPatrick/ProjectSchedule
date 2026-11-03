@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { sendNotifications } from "../integrations/notifications";
@@ -12,6 +13,47 @@ import { CANCELLATION_WINDOW_HOURS } from "../config";
 export type AppointmentActionResult =
   | { ok: true }
   | { ok: false; status: number; error: string };
+
+export async function createAppointmentForSalon(input: {
+  salonId: string;
+  serviceId: string;
+  clientId: string;
+  startsAt: Date;
+  endsAt: Date;
+  managementToken: string;
+  notes?: string | null;
+  status?: "CONFIRMED" | "PENDING";
+}): Promise<{ id: string; managementToken: string }> {
+  const id = `c${randomBytes(11).toString("hex")}`;
+  await prisma.$executeRaw`
+    INSERT INTO "Appointment" (
+      id,
+      "salonId",
+      "clientId",
+      "serviceId",
+      "startsAt",
+      "endsAt",
+      status,
+      "managementToken",
+      notes,
+      "createdAt",
+      "updatedAt"
+    ) VALUES (
+      ${id},
+      ${input.salonId},
+      ${input.clientId},
+      ${input.serviceId},
+      ${input.startsAt},
+      ${input.endsAt},
+      ${input.status ?? "CONFIRMED"}::"AppointmentStatus",
+      ${input.managementToken},
+      ${input.notes ?? null},
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+    )
+  `;
+  return { id, managementToken: input.managementToken };
+}
 
 /**
  * Promote a PENDING appointment to CONFIRMED, re-checking for any newly-

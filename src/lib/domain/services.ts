@@ -1,22 +1,7 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db/prisma";
+import { getSingleActiveSalonId } from "@/lib/domain/salon";
 import type { ServiceJsonCreate } from "@/lib/validation/adminJson";
-
-async function getSingleActiveSalonId(): Promise<string> {
-  const salons = await prisma.$queryRaw<{ id: string }[]>`
-    SELECT id FROM "Salon" WHERE status = 'ACTIVE' LIMIT 2
-  `;
-
-  if (salons.length !== 1) {
-    throw new Error(
-      salons.length === 0
-        ? "No active salon is configured."
-        : "Expected exactly one active salon."
-    );
-  }
-
-  return salons[0].id;
-}
 
 export async function createServiceForSingleSalon(
   input: ServiceJsonCreate

@@ -3,7 +3,13 @@ import { z } from "zod";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
-import { findClientIdByEmail } from "@/lib/domain/clients";
+import {
+  findClientIdByEmail,
+  findClientIdById,
+  upsertClientForSalon,
+} from "@/lib/domain/clients";
+import { createAppointmentForSalon } from "@/lib/domain/appointments";
+import { getSingleActiveSalonId } from "@/lib/domain/salon";
 import { sendNotifications } from "@/lib/integrations/notifications";
 import { reportError } from "@/lib/observability/reportError";
 import { toE164 } from "@/lib/phone";
@@ -15,7 +21,6 @@ import type { AppointmentsListResponse } from "@/lib/api-types";
  * List appointments in `[from, to)`. Both bounds are ISO timestamps (UTC).
  *
  * Defaults: today (in server time) through 30 days out. Returns at most 500
- * rows ordered by start time, in a shape that matches the web admin calendar
  * loader (client + service joined).
  */
 const querySchema = z.object({
@@ -101,6 +106,7 @@ export const GET = withAdmin(async (req) => {
 export const POST = withAdminJson(
   adminAppointmentCreateSchema,
   async (data) => {
+    const salonId = await getSingleActiveSalonId();
     const service = await prisma.service.findUnique({
       where: { id: data.serviceId },
     });
@@ -146,14 +152,11 @@ export const POST = withAdminJson(
     // one (mirrors the public booking flow's dedupe).
     let clientId: string;
     if (data.clientId) {
-      const exists = await prisma.client.findUnique({
-        where: { id: data.clientId },
-        select: { id: true },
-      });
-      if (!exists) {
+      const existingClientId = await findClientIdById(salonId, data.clientId);
+      if (!existingClientId) {
         return NextResponse.json({ error: "Client not found." }, { status: 404 });
       }
-      clientId = exists.id;
+      clientId = existingClientId;
     } else {
       const e164 = toE164(data.phone!);
       if (!e164) {
@@ -166,31 +169,30 @@ export const POST = withAdminJson(
       // the public flow); when absent we store "" — the Client.email column is
       // non-null, and notifications already skip email sends for a blank address.
       const email = data.email?.trim().toLowerCase() ?? "";
-      const existingId = email ? await findClientIdByEmail(email) : null;
-      const client = await prisma.client.upsert({
-        where: { id: existingId ?? "__nope__" },
-        create: {
+      const existingId = email
+        ? await findClientIdByEmail(salonId, email)
+        : null;
+      const client = await upsertClientForSalon({
+        salonId,
+        existingId,
           name: data.name!,
           email,
           phone: e164,
           smsOptIn: data.smsOptIn,
           emailOptIn: Boolean(email),
-        },
-        update: { name: data.name!, phone: e164, smsOptIn: data.smsOptIn },
       });
       clientId = client.id;
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        serviceId: service.id,
-        clientId,
-        startsAt,
-        endsAt,
-        status: "CONFIRMED",
-        managementToken: nanoid(24),
-        notes: data.notes,
-      },
+    const appointment = await createAppointmentForSalon({
+      salonId,
+      serviceId: service.id,
+      clientId,
+      startsAt,
+      endsAt,
+      status: "CONFIRMED",
+      managementToken: nanoid(24),
+      notes: data.notes,
     });
 
     if (data.notify) {

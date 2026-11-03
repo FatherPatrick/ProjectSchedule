@@ -12,15 +12,17 @@ const prismaMock = vi.hoisted(() => ({
   appointment: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
-    create: vi.fn(),
     deleteMany: vi.fn(),
   },
   service: { findUnique: vi.fn() },
-  client: { findUnique: vi.fn(), upsert: vi.fn() },
 }));
 const approveMock = vi.hoisted(() => vi.fn());
 const cancelMock = vi.hoisted(() => vi.fn());
 const findClientIdByEmailMock = vi.hoisted(() => vi.fn());
+const findClientIdByIdMock = vi.hoisted(() => vi.fn());
+const upsertClientForSalonMock = vi.hoisted(() => vi.fn());
+const createAppointmentForSalonMock = vi.hoisted(() => vi.fn());
+const getSingleActiveSalonIdMock = vi.hoisted(() => vi.fn());
 const sendNotificationsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth/admin", () => ({
@@ -28,11 +30,17 @@ vi.mock("@/lib/auth/admin", () => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/domain/appointments", () => ({
+  createAppointmentForSalon: createAppointmentForSalonMock,
   approveAppointment: approveMock,
   cancelAppointment: cancelMock,
 }));
 vi.mock("@/lib/domain/clients", () => ({
   findClientIdByEmail: findClientIdByEmailMock,
+  findClientIdById: findClientIdByIdMock,
+  upsertClientForSalon: upsertClientForSalonMock,
+}));
+vi.mock("@/lib/domain/salon", () => ({
+  getSingleActiveSalonId: getSingleActiveSalonIdMock,
 }));
 vi.mock("@/lib/integrations/notifications", () => ({
   sendNotifications: sendNotificationsMock,
@@ -47,7 +55,7 @@ beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
   prismaMock.appointment.findMany.mockReset().mockResolvedValue([]);
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
-  prismaMock.appointment.create.mockReset().mockResolvedValue({
+  createAppointmentForSalonMock.mockReset().mockResolvedValue({
     id: "appt_new",
     managementToken: "tok_123",
   });
@@ -57,12 +65,13 @@ beforeEach(() => {
     durationMinutes: 60,
     active: true,
   });
-  prismaMock.client.findUnique.mockReset().mockResolvedValue({ id: "client_1" });
-  prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_new" });
   prismaMock.appointment.deleteMany.mockReset().mockResolvedValue({ count: 3 });
+  getSingleActiveSalonIdMock.mockReset().mockResolvedValue("salon_1");
   approveMock.mockReset();
   cancelMock.mockReset();
   findClientIdByEmailMock.mockReset().mockResolvedValue(null);
+  findClientIdByIdMock.mockReset().mockResolvedValue("client_1");
+  upsertClientForSalonMock.mockReset().mockResolvedValue({ id: "client_new" });
   sendNotificationsMock.mockReset().mockResolvedValue(undefined);
 });
 
@@ -244,7 +253,7 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
     requireAdminEitherMock.mockResolvedValue(false);
     const res = await POST(createReq(EXISTING_BODY));
     expect(res.status).toBe(401);
-    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).not.toHaveBeenCalled();
   });
 
   it("400s when neither a clientId nor new-client details are given", async () => {
@@ -264,22 +273,24 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
     const past = new Date(Date.now() - 60_000).toISOString();
     const res = await POST(createReq({ ...EXISTING_BODY, startISO: past }));
     expect(res.status).toBe(400);
-    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).not.toHaveBeenCalled();
   });
 
   it("409s when the slot overlaps a confirmed appointment", async () => {
     prismaMock.appointment.findFirst.mockResolvedValue({ id: "other" });
     const res = await POST(createReq(EXISTING_BODY));
     expect(res.status).toBe(409);
-    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).not.toHaveBeenCalled();
   });
 
   it("creates a CONFIRMED appointment for an existing client and notifies", async () => {
     const res = await POST(createReq(EXISTING_BODY));
     expect(res.status).toBe(200);
-    expect(prismaMock.appointment.create).toHaveBeenCalledWith(
+    expect(createAppointmentForSalonMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: "CONFIRMED", clientId: "client_1" }),
+        salonId: "salon_1",
+        status: "CONFIRMED",
+        clientId: "client_1",
       })
     );
     expect(sendNotificationsMock).toHaveBeenCalledWith("appt_new", "CONFIRMATION");
@@ -302,11 +313,11 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
       })
     );
     expect(res.status).toBe(200);
-    expect(prismaMock.client.upsert).toHaveBeenCalled();
-    expect(prismaMock.appointment.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ clientId: "client_new" }),
-      })
+    expect(upsertClientForSalonMock).toHaveBeenCalledWith(
+      expect.objectContaining({ salonId: "salon_1", name: "New Person" })
+    );
+    expect(createAppointmentForSalonMock).toHaveBeenCalledWith(
+      expect.objectContaining({ salonId: "salon_1", clientId: "client_new" })
     );
   });
 
@@ -323,9 +334,11 @@ describe("POST /api/admin/appointments — admin books for a client", () => {
     // No email → no email-dedupe lookup, and the client is stored with a
     // blank email + emailOptIn disabled.
     expect(findClientIdByEmailMock).not.toHaveBeenCalled();
-    expect(prismaMock.client.upsert).toHaveBeenCalledWith(
+    expect(upsertClientForSalonMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({ email: "", emailOptIn: false }),
+        salonId: "salon_1",
+        email: "",
+        emailOptIn: false,
       })
     );
   });

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/db/prisma";
-import { findClientIdByEmail } from "@/lib/domain/clients";
+import { findClientIdByEmail, upsertClientForSalon } from "@/lib/domain/clients";
+import { createAppointmentForSalon } from "@/lib/domain/appointments";
+import { getSingleActiveSalonId } from "@/lib/domain/salon";
 import { verifyTurnstileToken } from "@/lib/integrations/captcha";
 import { parseJsonBody } from "@/lib/http/parseJsonBody";
 import { formatBiz } from "@/lib/timezone";
@@ -42,6 +44,7 @@ export async function POST(req: Request) {
     );
   }
   const data = parsed.data;
+  const salonId = await getSingleActiveSalonId();
 
   const service = await prisma.service.findUnique({
     where: { id: data.serviceId },
@@ -94,33 +97,28 @@ export async function POST(req: Request) {
   }
 
   const email = data.email?.trim().toLowerCase() ?? "";
-  const existingClientId = email ? await findClientIdByEmail(email) : null;
-  const client = await prisma.client.upsert({
-    where: { id: existingClientId ?? "__nope__" },
-    create: {
+  const existingClientId = email
+    ? await findClientIdByEmail(salonId, email)
+    : null;
+  const client = await upsertClientForSalon({
+    salonId,
+    existingId: existingClientId,
       name: data.name,
       email,
       phone: data.phone,
       smsOptIn: data.smsOptIn,
       emailOptIn: Boolean(email),
-    },
-    update: {
-      name: data.name,
-      phone: data.phone,
-      smsOptIn: data.smsOptIn,
-    },
   });
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      serviceId: service.id,
-      clientId: client.id,
-      startsAt,
-      endsAt,
-      status: "PENDING",
-      managementToken: nanoid(24),
-      notes: data.notes,
-    },
+  const appointment = await createAppointmentForSalon({
+    salonId,
+    serviceId: service.id,
+    clientId: client.id,
+    startsAt,
+    endsAt,
+    status: "PENDING",
+    managementToken: nanoid(24),
+    notes: data.notes,
   });
 
   // Notify admins on their phones (fire-and-forget).

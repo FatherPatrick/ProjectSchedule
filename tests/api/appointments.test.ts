@@ -16,14 +16,24 @@ import {
 
 const prismaMock = vi.hoisted(() => ({
   service: { findUnique: vi.fn() },
-  appointment: { findFirst: vi.fn(), create: vi.fn() },
-  client: { upsert: vi.fn() },
+  appointment: { findFirst: vi.fn() },
   setting: { upsert: vi.fn() },
 }));
+const getSingleActiveSalonIdMock = vi.hoisted(() => vi.fn());
+const findClientIdByEmailMock = vi.hoisted(() => vi.fn());
+const upsertClientForSalonMock = vi.hoisted(() => vi.fn());
+const createAppointmentForSalonMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/domain/clients", () => ({
-  findClientIdByEmail: vi.fn(async () => null),
+  findClientIdByEmail: findClientIdByEmailMock,
+  upsertClientForSalon: upsertClientForSalonMock,
+}));
+vi.mock("@/lib/domain/appointments", () => ({
+  createAppointmentForSalon: createAppointmentForSalonMock,
+}));
+vi.mock("@/lib/domain/salon", () => ({
+  getSingleActiveSalonId: getSingleActiveSalonIdMock,
 }));
 vi.mock("@/lib/integrations/notifications", () => ({
   sendNotifications: vi.fn(async () => undefined),
@@ -63,10 +73,15 @@ beforeEach(() => {
   _resetRateLimitStoreForTests();
   _resetCaptchaDedupeForTests();
   delete process.env.TURNSTILE_SECRET_KEY;
+  getSingleActiveSalonIdMock.mockReset().mockResolvedValue("salon_1");
+  findClientIdByEmailMock.mockReset().mockResolvedValue(null);
+  upsertClientForSalonMock.mockReset().mockResolvedValue({ id: "client_1" });
+  createAppointmentForSalonMock.mockReset().mockResolvedValue({
+    id: "appt_1",
+    managementToken: "mgmt-token-xyz",
+  });
   prismaMock.service.findUnique.mockReset();
   prismaMock.appointment.findFirst.mockReset().mockResolvedValue(null);
-  prismaMock.appointment.create.mockReset();
-  prismaMock.client.upsert.mockReset().mockResolvedValue({ id: "client_1" });
   // Default settings: no book-out limit so existing cases are unaffected.
   prismaMock.setting.upsert.mockReset().mockResolvedValue({
     id: "default",
@@ -151,7 +166,7 @@ describe("POST /api/appointments — domain rules", () => {
     ).toISOString();
     const res = await POST(postJson({ ...VALID_BODY, startISO: tooFar }));
     expect(res.status).toBe(400);
-    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).not.toHaveBeenCalled();
   });
 
   it("409s when the slot is already taken", async () => {
@@ -159,15 +174,11 @@ describe("POST /api/appointments — domain rules", () => {
     prismaMock.appointment.findFirst.mockResolvedValue({ id: "existing" });
     const res = await POST(postJson(VALID_BODY));
     expect(res.status).toBe(409);
-    expect(prismaMock.appointment.create).not.toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).not.toHaveBeenCalled();
   });
 
   it("creates the appointment and returns the management envelope on the happy path", async () => {
     mockServiceOk();
-    prismaMock.appointment.create.mockResolvedValue({
-      id: "appt_1",
-      managementToken: "mgmt-token-xyz",
-    });
 
     const res = await POST(postJson(VALID_BODY));
     expect(res.status).toBe(200);
@@ -182,25 +193,25 @@ describe("POST /api/appointments — domain rules", () => {
     expect(body.serviceName).toBe("Manicure");
     expect(body.whenLabel).toEqual(expect.any(String));
 
-    expect(prismaMock.appointment.create).toHaveBeenCalledOnce();
-    const createArgs = prismaMock.appointment.create.mock.calls[0][0] as {
-      data: { startsAt: Date; endsAt: Date; serviceId: string };
+    expect(createAppointmentForSalonMock).toHaveBeenCalledOnce();
+    const createArgs = createAppointmentForSalonMock.mock.calls[0][0] as {
+      salonId: string;
+      startsAt: Date;
+      endsAt: Date;
+      serviceId: string;
     };
     // endsAt should be exactly durationMinutes after startsAt.
     expect(
-      createArgs.data.endsAt.getTime() - createArgs.data.startsAt.getTime()
+      createArgs.endsAt.getTime() - createArgs.startsAt.getTime()
     ).toBe(60 * 60_000);
-    expect(createArgs.data.serviceId).toBe("svc_1");
+    expect(createArgs.serviceId).toBe("svc_1");
+    expect(createArgs.salonId).toBe("salon_1");
   });
 });
 
 describe("POST /api/appointments — rate limiting", () => {
   it("429s after 5 requests from the same IP inside the window", async () => {
     mockServiceOk();
-    prismaMock.appointment.create.mockResolvedValue({
-      id: "appt",
-      managementToken: "tok",
-    });
 
     // First 5 succeed (validation may still 409/200 etc.; we just care the
     // limiter doesn't reject them).
@@ -216,10 +227,6 @@ describe("POST /api/appointments — rate limiting", () => {
 
   it("does not throttle a different IP", async () => {
     mockServiceOk();
-    prismaMock.appointment.create.mockResolvedValue({
-      id: "appt",
-      managementToken: "tok",
-    });
     for (let i = 0; i < 5; i++) {
       await POST(postJson(VALID_BODY));
     }
@@ -233,10 +240,6 @@ describe("POST /api/appointments — rate limiting", () => {
 describe("POST /api/appointments \u2014 captcha gate", () => {
   it("is a no-op when TURNSTILE_SECRET_KEY is unset", async () => {
     mockServiceOk();
-    prismaMock.appointment.create.mockResolvedValue({
-      id: "appt",
-      managementToken: "tok",
-    });
     const res = await POST(postJson(VALID_BODY));
     expect(res.status).toBe(200);
   });
@@ -285,14 +288,10 @@ describe("POST /api/appointments \u2014 captcha gate", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     mockServiceOk();
-    prismaMock.appointment.create.mockResolvedValue({
-      id: "appt",
-      managementToken: "tok",
-    });
     const res = await POST(
       postJson({ ...VALID_BODY, captchaToken: "good-token" })
     );
     expect(res.status).toBe(200);
-    expect(prismaMock.appointment.create).toHaveBeenCalled();
+    expect(createAppointmentForSalonMock).toHaveBeenCalled();
   });
 });

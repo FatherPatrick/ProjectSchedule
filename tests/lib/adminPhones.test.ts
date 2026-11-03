@@ -11,25 +11,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
-  adminPhone: {
-    findUnique: vi.fn(),
-    findMany: vi.fn(),
-    upsert: vi.fn(),
-    deleteMany: vi.fn(),
-  },
+  $queryRaw: vi.fn(),
+  $executeRaw: vi.fn(),
 }));
+const getSingleActiveSalonIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/domain/salon", () => ({
+  getSingleActiveSalonId: getSingleActiveSalonIdMock,
+}));
 // `auth.ts` pulls in NextAuth + the full Prisma adapter; we don't exercise
 // requireAdmin here so a thin stub is enough.
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/auth/mobileTokens", () => ({ verifyAccessToken: vi.fn() }));
 
 beforeEach(() => {
-  prismaMock.adminPhone.findUnique.mockReset();
-  prismaMock.adminPhone.findMany.mockReset();
-  prismaMock.adminPhone.upsert.mockReset();
-  prismaMock.adminPhone.deleteMany.mockReset();
+  getSingleActiveSalonIdMock.mockReset().mockResolvedValue("salon_1");
+  prismaMock.$queryRaw.mockReset();
+  prismaMock.$executeRaw.mockReset();
 });
 
 async function importFresh() {
@@ -41,23 +40,24 @@ describe("isAdminPhone", () => {
   it("returns true when the DB has the phone", async () => {
     process.env.ADMIN_PHONES = "";
     const { isAdminPhone } = await importFresh();
-    prismaMock.adminPhone.findUnique.mockResolvedValueOnce({
-      phone: "+15555550001",
-    });
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ phone: "+15555550001" }]);
     expect(await isAdminPhone("+15555550001")).toBe(true);
+    const [query, ...values] = prismaMock.$queryRaw.mock.calls[0];
+    expect((query as TemplateStringsArray).join(" ")).toContain('FROM "AdminPhone"');
+    expect(values).toEqual(["salon_1", "+15555550001"]);
   });
 
   it("falls back to the env allow-list when the DB misses", async () => {
     process.env.ADMIN_PHONES = "+15555550002";
     const { isAdminPhone } = await importFresh();
-    prismaMock.adminPhone.findUnique.mockResolvedValueOnce(null);
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
     expect(await isAdminPhone("+15555550002")).toBe(true);
   });
 
   it("returns false when both DB and env miss", async () => {
     process.env.ADMIN_PHONES = "+15555559999";
     const { isAdminPhone } = await importFresh();
-    prismaMock.adminPhone.findUnique.mockResolvedValueOnce(null);
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
     expect(await isAdminPhone("+15555550003")).toBe(false);
   });
 });
@@ -66,7 +66,7 @@ describe("listAdminPhones", () => {
   it("unions DB rows + env-only rows and tags source", async () => {
     process.env.ADMIN_PHONES = "+15555550001,+15555550002";
     const { listAdminPhones } = await importFresh();
-    prismaMock.adminPhone.findMany.mockResolvedValueOnce([
+    prismaMock.$queryRaw.mockResolvedValueOnce([
       {
         phone: "+15555550001", // also in env → stays env-managed (non-removable)
         createdAt: new Date("2026-05-13T00:00:00Z"),
@@ -98,12 +98,15 @@ describe("listAdminPhones", () => {
     // env-only entries default notify=on and use the sentinel timestamp.
     expect(rows[2].notify).toBe(true);
     expect(rows[2].createdAt.getTime()).toBe(0);
+    const [query, ...values] = prismaMock.$queryRaw.mock.calls[0];
+    expect((query as TemplateStringsArray).join(" ")).toContain('WHERE "salonId" =');
+    expect(values).toEqual(["salon_1"]);
   });
 
   it("returns empty when DB is empty and env is empty", async () => {
     process.env.ADMIN_PHONES = "";
     const { listAdminPhones } = await importFresh();
-    prismaMock.adminPhone.findMany.mockResolvedValueOnce([]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
     expect(await listAdminPhones()).toEqual([]);
   });
 });
@@ -111,26 +114,39 @@ describe("listAdminPhones", () => {
 describe("addAdminPhone", () => {
   it("upserts with the inviter id so re-invites are no-ops", async () => {
     const { addAdminPhone } = await importFresh();
-    prismaMock.adminPhone.upsert.mockResolvedValueOnce({});
+    prismaMock.$executeRaw.mockResolvedValueOnce(1);
     await addAdminPhone("+15555550001", "u-inviter");
-    expect(prismaMock.adminPhone.upsert).toHaveBeenCalledWith({
-      where: { phone: "+15555550001" },
-      create: { phone: "+15555550001", createdById: "u-inviter" },
-      update: {},
-    });
+    const [query, ...values] = prismaMock.$executeRaw.mock.calls[0];
+    expect((query as TemplateStringsArray).join(" ")).toContain("DO NOTHING");
+    expect(values).toEqual(["salon_1", "+15555550001", "u-inviter"]);
+  });
+});
+
+describe("setAdminNotify", () => {
+  it("upserts notification settings for the sole active salon", async () => {
+    const { setAdminNotify } = await importFresh();
+    prismaMock.$executeRaw.mockResolvedValueOnce(1);
+    await setAdminNotify("+15555550001", false);
+
+    const [query, ...values] = prismaMock.$executeRaw.mock.calls[0];
+    expect((query as TemplateStringsArray).join(" ")).toContain("DO UPDATE SET notify");
+    expect(values).toEqual(["salon_1", "+15555550001", false]);
   });
 });
 
 describe("removeAdminPhone", () => {
   it("returns true when a row was deleted", async () => {
     const { removeAdminPhone } = await importFresh();
-    prismaMock.adminPhone.deleteMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ phone: "+15555550001" }]);
     expect(await removeAdminPhone("+15555550001")).toBe(true);
+    const [query, ...values] = prismaMock.$queryRaw.mock.calls[0];
+    expect((query as TemplateStringsArray).join(" ")).toContain("DELETE FROM");
+    expect(values).toEqual(["salon_1", "+15555550001"]);
   });
 
   it("returns false when no row matched", async () => {
     const { removeAdminPhone } = await importFresh();
-    prismaMock.adminPhone.deleteMany.mockResolvedValueOnce({ count: 0 });
+    prismaMock.$queryRaw.mockResolvedValueOnce([]);
     expect(await removeAdminPhone("+15555550001")).toBe(false);
   });
 });

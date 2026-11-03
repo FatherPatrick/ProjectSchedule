@@ -16,6 +16,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { verifyAccessToken } from "@/lib/auth/mobileTokens";
+import { getSingleActiveSalonId } from "@/lib/domain/salon";
 import { toE164 } from "@/lib/phone";
 
 /** Phones inherited from the `ADMIN_PHONES` env var, normalised to E.164. */
@@ -27,11 +28,14 @@ export const ENV_ADMIN_PHONES: ReadonlySet<string> = new Set(
 );
 
 export async function isAdminPhone(phoneE164: string): Promise<boolean> {
-  const row = await prisma.adminPhone.findUnique({
-    where: { phone: phoneE164 },
-    select: { phone: true },
-  });
-  if (row) return true;
+  const salonId = await getSingleActiveSalonId();
+  const rows = await prisma.$queryRaw<{ phone: string }[]>`
+    SELECT phone
+    FROM "AdminPhone"
+    WHERE "salonId" = ${salonId} AND phone = ${phoneE164}
+    LIMIT 1
+  `;
+  if (rows.length > 0) return true;
   return ENV_ADMIN_PHONES.has(phoneE164);
 }
 
@@ -45,16 +49,24 @@ export interface AdminPhoneRow {
   source: "db" | "env";
 }
 
+type DbAdminPhoneRow = Pick<
+  AdminPhoneRow,
+  "phone" | "createdAt" | "createdById" | "notify"
+>;
+
 /**
  * Returns the union of DB-managed admin phones and any env-bootstrap phones.
  * A phone present in `ADMIN_PHONES` is always reported as `source: "env"`
  * (non-removable) even when a DB row exists to carry its `notify` setting.
  */
 export async function listAdminPhones(): Promise<AdminPhoneRow[]> {
-  const dbRows = await prisma.adminPhone.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { phone: true, createdAt: true, createdById: true, notify: true },
-  });
+  const salonId = await getSingleActiveSalonId();
+  const dbRows = await prisma.$queryRaw<DbAdminPhoneRow[]>`
+    SELECT phone, "createdAt", "createdById", notify
+    FROM "AdminPhone"
+    WHERE "salonId" = ${salonId}
+    ORDER BY "createdAt" ASC
+  `;
   const dbPhones = new Set(dbRows.map((r) => r.phone));
 
   const rows: AdminPhoneRow[] = dbRows.map((r) => ({
@@ -88,11 +100,13 @@ export async function setAdminNotify(
   phoneE164: string,
   notify: boolean
 ): Promise<void> {
-  await prisma.adminPhone.upsert({
-    where: { phone: phoneE164 },
-    create: { phone: phoneE164, notify, createdById: null },
-    update: { notify },
-  });
+  const salonId = await getSingleActiveSalonId();
+  await prisma.$executeRaw`
+    INSERT INTO "AdminPhone" ("salonId", phone, notify, "createdById")
+    VALUES (${salonId}, ${phoneE164}, ${notify}, NULL)
+    ON CONFLICT ("salonId", phone)
+    DO UPDATE SET notify = EXCLUDED.notify
+  `;
 }
 
 /**
@@ -108,13 +122,14 @@ export async function addAdminPhone(
   phoneE164: string,
   addedById: string | null
 ): Promise<void> {
+  const salonId = await getSingleActiveSalonId();
   // Idempotent: re-inviting an existing admin is a no-op rather than an
   // error so the UI doesn't have to special-case the race.
-  await prisma.adminPhone.upsert({
-    where: { phone: phoneE164 },
-    create: { phone: phoneE164, createdById: addedById },
-    update: {},
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "AdminPhone" ("salonId", phone, "createdById")
+    VALUES (${salonId}, ${phoneE164}, ${addedById})
+    ON CONFLICT ("salonId", phone) DO NOTHING
+  `;
 }
 
 /**
@@ -123,10 +138,13 @@ export async function addAdminPhone(
  * removed via this helper — they're tied to the deployment env.
  */
 export async function removeAdminPhone(phoneE164: string): Promise<boolean> {
-  const result = await prisma.adminPhone.deleteMany({
-    where: { phone: phoneE164 },
-  });
-  return result.count > 0;
+  const salonId = await getSingleActiveSalonId();
+  const rows = await prisma.$queryRaw<{ phone: string }[]>`
+    DELETE FROM "AdminPhone"
+    WHERE "salonId" = ${salonId} AND phone = ${phoneE164}
+    RETURNING phone
+  `;
+  return rows.length > 0;
 }
 
 /**

@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
 }));
+const getSingleActiveSalonIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/domain/salon", () => ({
+  getSingleActiveSalonId: getSingleActiveSalonIdMock,
+}));
 
 import { createServiceForSingleSalon } from "@/lib/domain/services";
 
@@ -17,38 +21,30 @@ const SERVICE = {
 
 beforeEach(() => {
   prismaMock.$queryRaw.mockReset();
+  getSingleActiveSalonIdMock.mockReset().mockResolvedValue("salon_1");
 });
 
 describe("createServiceForSingleSalon", () => {
   it("creates a service for the sole active salon without slug lookup", async () => {
-    prismaMock.$queryRaw
-      .mockResolvedValueOnce([{ id: "salon_1" }])
-      .mockResolvedValueOnce([{ id: "service_1" }]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ id: "service_1" }]);
 
     await expect(createServiceForSingleSalon(SERVICE)).resolves.toBe("service_1");
 
-    const salonQuery = prismaMock.$queryRaw.mock.calls[0][0] as TemplateStringsArray;
-    expect(salonQuery.join(" ")).toContain('FROM "Salon" WHERE status = \'ACTIVE\'');
-    expect(salonQuery.join(" ")).not.toContain("slug");
-
-    const insertCall = prismaMock.$queryRaw.mock.calls[1];
+    expect(getSingleActiveSalonIdMock).toHaveBeenCalledOnce();
+    const insertCall = prismaMock.$queryRaw.mock.calls[0];
     expect(insertCall[0].join(" ")).toContain('INSERT INTO "Service"');
     expect(insertCall).toContain("salon_1");
     expect(insertCall).toContain("Pedicure");
   });
 
   it.each([
-    ["no active salon", []],
-    ["multiple active salons", [{ id: "salon_1" }, { id: "salon_2" }]],
-  ])("rejects when there are %s", async (_caseName, salons) => {
-    prismaMock.$queryRaw.mockResolvedValueOnce(salons);
+    ["no active salon", "No active salon is configured."],
+    ["multiple active salons", "Expected exactly one active salon."],
+  ])("rejects when there are %s", async (_caseName, error) => {
+    getSingleActiveSalonIdMock.mockRejectedValueOnce(new Error(error));
 
-    await expect(createServiceForSingleSalon(SERVICE)).rejects.toThrow(
-      salons.length === 0
-        ? "No active salon is configured."
-        : "Expected exactly one active salon."
-    );
-    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    await expect(createServiceForSingleSalon(SERVICE)).rejects.toThrow(error);
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 });
 
