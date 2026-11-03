@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { formatPrice, localDateKey } from "@/lib/utils";
+import { toE164 } from "@/lib/phone";
 import { Alert } from "@/components/Alert";
 import { Button } from "@/components/Button";
 import { TurnstileWidget, isCaptchaEnabled } from "@/components/TurnstileWidget";
@@ -254,6 +255,13 @@ export function BookingForm({
       setError("Please acknowledge the studio policies.");
       return;
     }
+    const normalizedPhone = toE164(phone);
+    if (!normalizedPhone) {
+      setError(
+        "Enter a valid phone number, e.g. (555) 123-4567. Country code is optional."
+      );
+      return;
+    }
     if (captchaRequired && !captchaToken) {
       setError("Please complete the captcha challenge.");
       return;
@@ -264,13 +272,13 @@ export function BookingForm({
       addOnServiceIds,
       startISO,
       name,
-      phone,
+      phone: normalizedPhone,
       smsOptIn,
       captchaToken,
     };
     if (waitlistMode) {
       endpoint = "/api/waitlist";
-      body = { serviceId, name, phone, smsOptIn, captchaToken };
+      body = { serviceId, name, phone: normalizedPhone, smsOptIn, captchaToken };
     } else if (proposeMode) {
       const iso = customStartISO();
       if (!iso) {
@@ -293,7 +301,7 @@ export function BookingForm({
         addOnServiceIds,
         startISO: iso,
         name,
-        phone,
+        phone: normalizedPhone,
         smsOptIn,
         notes: customNotes || undefined,
         captchaToken,

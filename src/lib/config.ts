@@ -1,5 +1,5 @@
 export const BUSINESS_NAME =
-  process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Polished Nail Studio";
+  process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Virgo Nailz and Skin";
 
 export const BUSINESS_TIMEZONE =
   process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Los_Angeles";

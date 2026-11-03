@@ -18,12 +18,12 @@ const prisma = new PrismaClient();
 // Derived from the env vars that previously drove the single-tenant config.
 // Override these before running if your local env differs.
 
-const SALON_SLUG = (process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Virgo Nailz")
+const SALON_SLUG = (process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Virgo Nailz and Skin")
   .toLowerCase()
   .replace(/[^a-z0-9]+/g, "-")
   .replace(/^-|-$/g, "");
 
-const SALON_NAME = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Virgo Nailz";
+const SALON_NAME = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Virgo Nailz and Skin";
 const SALON_TIMEZONE =
   process.env.NEXT_PUBLIC_BUSINESS_TIMEZONE ?? "America/Los_Angeles";
 

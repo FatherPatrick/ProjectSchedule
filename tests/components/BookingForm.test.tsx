@@ -115,4 +115,46 @@ describe("BookingForm submit gating", () => {
       await screen.findByText("Proposed time must be at least 24 hours from now.")
     ).toBeTruthy();
   });
+
+  it("submits a formatted 10-digit phone with the default +1 country code", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({ whenLabel: "July 1", serviceName: "Manicure" }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          slots: [{ startISO: "2099-07-01T15:00:00.000Z", label: "3:00 PM" }],
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <BookingForm services={SERVICES} closedDayOfWeek={[]} maxAdvanceDays={null} waitlistEnabled={false} />
+    );
+
+    await user.click(screen.getByText("pick-day"));
+    await user.click(await screen.findByText("3:00 PM"));
+    await user.type(screen.getByPlaceholderText("Full name"), "Pat Smith");
+    await user.type(
+      screen.getByPlaceholderText("Mobile phone (e.g. (555) 123-4567)"),
+      "(555) 123-4567"
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[1]);
+    await user.click(checkboxes[2]);
+    await user.click(screen.getByRole("button", { name: /Book Manicure/ }));
+
+    const bookingCall = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(bookingCall).toBeDefined();
+    expect(JSON.parse(String(bookingCall?.[1]?.body))).toMatchObject({
+      phone: "+15551234567",
+    });
+  });
 });
