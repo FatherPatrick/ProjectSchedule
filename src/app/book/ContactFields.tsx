@@ -40,7 +40,8 @@ export function ContactFields({
       <TextInput
         required
         type="tel"
-        placeholder="Mobile phone (e.g. +1 555 123 4567)"
+        autoComplete="tel"
+        placeholder="Mobile phone (e.g. (555) 123-4567)"
         className="w-full"
         value={phone}
         onChange={(e) => onPhoneChange(e.target.value)}
