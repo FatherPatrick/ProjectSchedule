@@ -6,14 +6,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAdminEitherMock = vi.hoisted(() => vi.fn());
+const createServiceForSingleSalonMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
-  service: { findMany: vi.fn(), create: vi.fn() },
+  service: { findMany: vi.fn() },
 }));
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdminEither: requireAdminEitherMock,
 }));
 vi.mock("@/lib/db/prisma", () => ({ prisma: prismaMock }));
+vi.mock("@/lib/domain/services", () => ({
+  createServiceForSingleSalon: createServiceForSingleSalonMock,
+}));
 
 import { GET, POST } from "@/app/api/admin/services/route";
 
@@ -31,7 +35,7 @@ function postReq(body: unknown): Request {
 beforeEach(() => {
   requireAdminEitherMock.mockReset().mockResolvedValue(true);
   prismaMock.service.findMany.mockReset().mockResolvedValue([]);
-  prismaMock.service.create.mockReset();
+  createServiceForSingleSalonMock.mockReset().mockResolvedValue("svc_new");
 });
 
 describe("GET /api/admin/services", () => {
@@ -105,7 +109,7 @@ describe("POST /api/admin/services", () => {
   it("400s on a sub-floor duration (canonical schema rule)", async () => {
     const res = await POST(postReq({ ...VALID, durationMinutes: 3 }));
     expect(res.status).toBe(400);
-    expect(prismaMock.service.create).not.toHaveBeenCalled();
+    expect(createServiceForSingleSalonMock).not.toHaveBeenCalled();
   });
 
   it("400s on a missing name", async () => {
@@ -116,16 +120,10 @@ describe("POST /api/admin/services", () => {
   });
 
   it("creates the service and returns 201 with the new id", async () => {
-    prismaMock.service.create.mockResolvedValue({ id: "svc_new" });
     const res = await POST(postReq(VALID));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ data: { id: "svc_new" } });
 
-    const createArgs = prismaMock.service.create.mock.calls[0][0] as {
-      data: { name: string; sortOrder: number };
-    };
-    expect(createArgs.data.name).toBe("Pedicure");
-    // sortOrder defaults to 0 when not provided.
-    expect(createArgs.data.sortOrder).toBe(0);
+    expect(createServiceForSingleSalonMock).toHaveBeenCalledWith(VALID);
   });
 });

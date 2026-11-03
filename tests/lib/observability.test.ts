@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { logger, serializeError } from "@/lib/observability/logger";
 import { reportError } from "@/lib/observability/reportError";
 
-let stdoutSpy: ReturnType<typeof vi.spyOn>;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
+let logSpy: ReturnType<typeof vi.spyOn>;
+let errorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-  stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-  stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
-  stdoutSpy.mockRestore();
-  stderrSpy.mockRestore();
+  logSpy.mockRestore();
+  errorSpy.mockRestore();
   delete process.env.LOG_LEVEL;
 });
 
@@ -25,20 +25,20 @@ function lastWritten(spy: ReturnType<typeof vi.spyOn>): unknown {
 describe("logger", () => {
   it("emits info on stdout with the expected envelope", () => {
     logger.info("hello", { route: "/x", userId: "u1" });
-    const rec = lastWritten(stdoutSpy) as Record<string, unknown>;
+    const rec = lastWritten(logSpy) as Record<string, unknown>;
     expect(rec.level).toBe("info");
     expect(rec.msg).toBe("hello");
     expect(rec.route).toBe("/x");
     expect(rec.userId).toBe("u1");
     expect(typeof rec.time).toBe("string");
-    expect(stderrSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it("routes warn/error to stderr", () => {
     logger.warn("yikes");
     logger.error("bad");
-    expect(stderrSpy.mock.calls.length).toBe(2);
-    expect(stdoutSpy).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.length).toBe(2);
+    expect(logSpy).not.toHaveBeenCalled();
   });
 
   it("respects LOG_LEVEL=warn by suppressing info/debug", () => {
@@ -46,8 +46,8 @@ describe("logger", () => {
     logger.debug("d");
     logger.info("i");
     logger.warn("w");
-    expect(stdoutSpy).not.toHaveBeenCalled();
-    expect(stderrSpy.mock.calls.length).toBe(1);
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorSpy.mock.calls.length).toBe(1);
   });
 });
 
@@ -78,7 +78,7 @@ describe("serializeError", () => {
 describe("reportError", () => {
   it("emits an error log with serialized error and context", () => {
     reportError(new Error("kaboom"), { where: "test.case", route: "/api/x" });
-    const rec = lastWritten(stderrSpy) as Record<string, unknown>;
+    const rec = lastWritten(errorSpy) as Record<string, unknown>;
     expect(rec.level).toBe("error");
     expect(rec.msg).toBe("[error] test.case");
     expect(rec.route).toBe("/api/x");

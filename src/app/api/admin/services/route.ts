@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { withAdmin, withAdminJson } from "@/lib/http/withAdmin";
 import { serviceJsonCreateSchema } from "@/lib/validation/adminJson";
+import { createServiceForSingleSalon } from "@/lib/domain/services";
 import type {
   ServiceCreateResponse,
   ServicesListResponse,
@@ -30,14 +30,9 @@ export const GET = withAdmin(async (req) => {
 });
 
 export const POST = withAdminJson(serviceJsonCreateSchema, async (input) => {
-  const { sortOrder, ...rest } = input;
-  const data: Prisma.ServiceCreateInput = {
-    ...rest,
-    sortOrder: sortOrder ?? 0,
-  };
-  const created = await prisma.service.create({ data });
+  const id = await createServiceForSingleSalon(input);
   return NextResponse.json(
-    { data: { id: created.id } } satisfies ServiceCreateResponse,
+    { data: { id } } satisfies ServiceCreateResponse,
     { status: 201 }
   );
 });

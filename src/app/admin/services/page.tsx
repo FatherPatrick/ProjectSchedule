@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { adminAction } from "@/lib/admin/serverAction";
 import { parseServiceCreateForm } from "@/lib/validation/admin";
+import { createServiceForSingleSalon } from "@/lib/domain/services";
 import { formatDuration, formatPrice } from "@/lib/utils";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -14,7 +15,7 @@ async function createService(formData: FormData) {
   "use server";
   await adminAction("/admin/services", "created", async () => {
     const data = parseServiceCreateForm(formData);
-    await prisma.service.create({ data });
+    await createServiceForSingleSalon(data);
   });
 }
 
